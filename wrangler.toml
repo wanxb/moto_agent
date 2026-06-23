@@ -1,0 +1,22 @@
+name = "moto-agent"
+main = "src/index.ts"
+compatibility_date = "2024-09-23"
+compatibility_flags = ["nodejs_compat"]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "moto-agent-db"
+database_id = "aabb7693-c5bd-457f-9ad6-1e7af53c2450"
+
+[[kv_namespaces]]
+binding = "SESSION_KV"
+id = "2d40bc5b10a9453d80573163222b702e"
+preview_id = "c7e3944db10449e79cc12040fd5781e3"
+
+# Secrets are set via: wrangler secret put SECRET_NAME
+# Required secrets:
+#   TELEGRAM_BOT_TOKEN
+#   TELEGRAM_WEBHOOK_SECRET
+#   DEEPSEEK_API_KEY
+#   ANTHROPIC_API_KEY
+#   ALLOWED_CHAT_ID
