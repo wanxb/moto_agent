@@ -1,6 +1,6 @@
 # ADR-0009：Phase 3 Web Dashboard — Cloudflare Worker 内嵌 + Chart.js
 
-**状态**：📋 Planned ·  **日期**：Phase 3（规划）
+**状态**：✅ Implemented ·  **日期**：Phase 3
 
 ## 背景
 

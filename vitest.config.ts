@@ -14,6 +14,7 @@ export default defineWorkersConfig({
             DEEPSEEK_API_KEY:        'test-deepseek-key',
             ANTHROPIC_API_KEY:       'test-anthropic-key',
             ALLOWED_CHAT_ID:         '999999',
+            DASHBOARD_TOKEN:         'test-db-token',
           },
         },
       },

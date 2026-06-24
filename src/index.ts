@@ -6,6 +6,8 @@ import { transcribe } from './stt';
 import { bootstrap } from './bootstrap';
 import { RestAdapter } from './gateway/adapters/rest';
 import { MAX_VOICE_SECONDS } from './config';
+import { handleApiRequest } from './routes/api';
+import { dashboardPage } from './routes/dashboard-html';
 
 const WELCOME = `👋 摩托车油耗管理助手
 
@@ -111,6 +113,17 @@ export default {
           console.error('[api] chat error:', e instanceof Error ? e.message : String(e));
           return new Response(JSON.stringify({ error: '处理失败' }), { status: 500, headers: { 'Content-Type': 'application/json' } });
         }
+      }
+
+      // ── Dashboard HTML ────────────────────────────────────────────────────
+      if (url.pathname === '/dashboard') {
+        const token = url.searchParams.get('token') || 'YOUR_TOKEN';
+        return new Response(dashboardPage(token), { status: 200, headers: { 'Content-Type': 'text/html; charset=utf-8' } });
+      }
+
+      // ── Dashboard API (read-only, token auth) ─────────────────────────────
+      if (url.pathname.startsWith('/api/v1/') && request.method === 'GET') {
+        return handleApiRequest(request, env);
       }
 
       // ── Telegram webhook ──────────────────────────────────────────────────
