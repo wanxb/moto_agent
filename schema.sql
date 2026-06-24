@@ -53,6 +53,7 @@ CREATE TABLE IF NOT EXISTS reminders (
     mode             TEXT    NOT NULL,              -- 'mileage' | 'date'
     trigger_odometer REAL,
     trigger_date     TEXT,
+    interval_km      REAL,                          -- 里程续期间隔（spec 006，NULL=一次性）
     note             TEXT,
     chat_id          TEXT,                          -- 推送目标（空→用 ALLOWED_CHAT_ID）
     status           TEXT    NOT NULL DEFAULT 'active',

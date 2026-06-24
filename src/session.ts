@@ -18,13 +18,18 @@ export async function runAgent(
 
   messages.push({ role: 'user', content: userText });
 
+  const t0 = Date.now();
   let reply: string;
+  let status = 'ok';
   try {
     reply = await agentLoop(messages, env);
   } catch (e) {
     console.error('[agent] error:', e);
     reply = '出错了，请稍后重试。';
+    status = 'error';
   }
+  // 结构化埋点：端到端延迟 + 成败（spec 006）
+  console.log(`[metric] latency_ms=${Date.now() - t0} status=${status} chat=${chatId}`);
 
   const trimmed = messages.slice(-MAX_SESSION_MESSAGES);
   await env.SESSION_KV.put(key, JSON.stringify(trimmed), { expirationTtl: SESSION_TTL });

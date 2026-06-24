@@ -4,7 +4,7 @@ import { callLLM } from './llm';
 
 const MAX_ROUNDS = 4;
 
-function buildSystemPrompt(): string {
+export function buildSystemPrompt(): string {
   const today = new Date().toISOString().split('T')[0];
   return `你是一个摩托车油耗管理助手，帮助用户记录加油信息和查询油耗统计。
 

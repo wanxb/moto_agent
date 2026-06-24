@@ -83,6 +83,7 @@ export interface Reminder {
   mode: 'mileage' | 'date';
   trigger_odometer: number | null;
   trigger_date: string | null;
+  interval_km: number | null;
   note: string | null;
   chat_id: string | null;
   status: 'active' | 'done';

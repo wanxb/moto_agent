@@ -548,6 +548,8 @@ async function setReminder(input: Record<string, unknown>, db: D1Database): Prom
   if (mode === 'mileage') {
     let target = trigger_odometer ?? null;
     let basisNote = '';
+    // 仅"间隔"模式存 interval_km → 触发后自动续期；绝对目标不存 → 一次性（spec 006）
+    const intervalToStore = (trigger_odometer == null && interval_km != null) ? interval_km : null;
     if (target == null) {
       if (interval_km == null) return '里程提醒需要给"间隔公里数"或"目标里程"其中之一。';
       // 基准：上次同类保养里程 → 否则当前最新里程
@@ -557,8 +559,9 @@ async function setReminder(input: Record<string, unknown>, db: D1Database): Prom
       target = basis + interval_km;
       basisNote = `（上次 ${basis.toLocaleString('zh')} km + ${interval_km}）`;
     }
-    await insertReminder(db, { vehicle_id: vehicleId, type, mode: 'mileage', trigger_odometer: target, note });
-    return `🔔 已设置提醒${tag}\n${type} · 里程达到 ${target.toLocaleString('zh')} km 时提醒${basisNote}`;
+    await insertReminder(db, { vehicle_id: vehicleId, type, mode: 'mileage', trigger_odometer: target, interval_km: intervalToStore, note });
+    const renewNote = intervalToStore != null ? `\n（每 ${intervalToStore} km 自动续期）` : '';
+    return `🔔 已设置提醒${tag}\n${type} · 里程达到 ${target.toLocaleString('zh')} km 时提醒${basisNote}${renewNote}`;
   }
 
   // date mode

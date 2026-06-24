@@ -47,6 +47,7 @@ export async function initDB(db: D1Database): Promise<void> {
       mode             TEXT    NOT NULL,
       trigger_odometer REAL,
       trigger_date     TEXT,
+      interval_km      REAL,
       note             TEXT,
       chat_id          TEXT,
       status           TEXT    NOT NULL DEFAULT 'active',

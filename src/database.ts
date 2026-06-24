@@ -169,14 +169,14 @@ export async function getLatestOdometer(db: D1Database, vehicleId?: number): Pro
 export async function insertReminder(db: D1Database, data: {
   vehicle_id?: number | null; type: string; mode: 'mileage' | 'date';
   trigger_odometer?: number | null; trigger_date?: string | null;
-  note?: string; chat_id?: string | null;
+  interval_km?: number | null; note?: string | null; chat_id?: string | null;
 }): Promise<number> {
   const res = await db.prepare(
-    'INSERT INTO reminders (vehicle_id, type, mode, trigger_odometer, trigger_date, note, chat_id) VALUES (?, ?, ?, ?, ?, ?, ?)'
+    'INSERT INTO reminders (vehicle_id, type, mode, trigger_odometer, trigger_date, interval_km, note, chat_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
   ).bind(
     data.vehicle_id ?? null, data.type, data.mode,
     data.trigger_odometer ?? null, data.trigger_date ?? null,
-    data.note ?? null, data.chat_id ?? null
+    data.interval_km ?? null, data.note ?? null, data.chat_id ?? null
   ).run();
   return res.meta.last_row_id as number;
 }

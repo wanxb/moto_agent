@@ -1,0 +1,22 @@
+[
+  { "input": "刚加了 10 升 95 号，花了 98 块，里程 12580", "expectTool": "log_fuel", "expectArgs": { "liters": 10, "price_total": 98, "odometer": 12580 } },
+  { "input": "加油，38 升，总价 370，现在表显 8200", "expectTool": "log_fuel", "expectArgs": { "liters": 38, "price_total": 370, "odometer": 8200 } },
+  { "input": "小绿加了 5 升花 40，里程 34600", "expectTool": "log_fuel", "expectArgs": { "vehicle": "小绿", "liters": 5 } },
+  { "input": "今天骑了一圈，里程到 12800", "expectTool": "log_mileage", "expectArgs": { "odometer": 12800 } },
+  { "input": "最近 3 次油耗怎么样", "expectTool": "query_stats", "expectArgs": { "mode": "recent" } },
+  { "input": "本月油耗统计", "expectTool": "query_stats", "expectArgs": { "mode": "date_range" } },
+  { "input": "上次什么时候加的油", "expectTool": "get_last_record" },
+  { "input": "我有哪些车", "expectTool": "list_vehicles" },
+  { "input": "添加一辆车，叫通勤车", "expectTool": "add_vehicle", "expectArgs": { "name": "通勤车" } },
+  { "input": "默认车设成通勤车", "expectTool": "set_default_vehicle", "expectArgs": { "name": "通勤车" } },
+  { "input": "把小绿改名叫大绿", "expectTool": "rename_vehicle", "expectArgs": { "name": "小绿", "new_name": "大绿" } },
+  { "input": "换机油，里程 13000，花了 80", "expectTool": "log_maintenance", "expectArgs": { "type": "机油", "odometer": 13000 } },
+  { "input": "交了保险 1200 块", "expectTool": "log_maintenance", "expectArgs": { "type": "保险" } },
+  { "input": "上次换机油是什么时候", "expectTool": "query_maintenance", "expectArgs": { "type": "机油", "last_only": true } },
+  { "input": "机油每 3000 公里提醒我", "expectTool": "set_reminder", "expectArgs": { "type": "机油", "mode": "mileage", "interval_km": 3000 } },
+  { "input": "保险 2027-01-05 到期提醒", "expectTool": "set_reminder", "expectArgs": { "type": "保险", "mode": "date", "trigger_date": "2027-01-05" } },
+  { "input": "我设了哪些提醒", "expectTool": "list_reminders" },
+  { "input": "取消机油提醒", "expectTool": "cancel_reminder", "expectArgs": { "type": "机油" } },
+  { "input": "上一条里程改成 12680", "expectTool": "update_last_fuel", "expectArgs": { "odometer": 12680 } },
+  { "input": "删掉刚才那条加油记录", "expectTool": "delete_last_fuel" }
+]

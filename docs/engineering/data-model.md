@@ -63,6 +63,7 @@ CREATE TABLE reminders (
     mode             TEXT    NOT NULL,       -- 'mileage' | 'date'
     trigger_odometer REAL,                   -- 里程模式目标里程
     trigger_date     TEXT,                   -- 日期模式 ISO 日期
+    interval_km      REAL,                   -- 里程续期间隔（spec 006，NULL=一次性）
     note             TEXT,
     chat_id          TEXT,                   -- 推送目标（空→ ALLOWED_CHAT_ID）
     status           TEXT    NOT NULL DEFAULT 'active',  -- active | done
@@ -156,6 +157,7 @@ CREATE INDEX idx_vehicles_default ON vehicles(is_default);
 > | [`0002_maintenance.sql`](../../migrations/0002_maintenance.sql) | 维修保养：`maintenance_records` 表（纯新增，可重入） | [spec 002](../specs/002-maintenance/) |
 > | [`0003_reminders.sql`](../../migrations/0003_reminders.sql) | 定时提醒：`reminders` 表（纯新增，可重入） | [spec 003](../specs/003-reminders/) |
 > | [`0004_soft_delete.sql`](../../migrations/0004_soft_delete.sql) | 软删除：`fuel_records` 加 `deleted_at`（前向一次性，ALTER 非幂等） | [spec 004](../specs/004-record-edit/) |
+> | [`0005_reminder_interval.sql`](../../migrations/0005_reminder_interval.sql) | 提醒续期：`reminders` 加 `interval_km`（前向一次性） | [spec 006](../specs/006-hardening/) |
 
 ---
 

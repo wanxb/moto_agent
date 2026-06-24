@@ -56,7 +56,7 @@ agentLoop(messages):
 | `rename_vehicle` | `name, new_name` | 车辆改名（spec 005，历史记录自动显示新名） | ✅ 已改名 |
 | `log_maintenance` | `date, type`（+ `odometer`, `cost`, `note`, `vehicle`） | 记录保养（spec 002） | ✅ 已记录保养 |
 | `query_maintenance` | 无（+ `type`, `last_only`, `vehicle`） | 查询保养历史 / 某类型最近一次 | 🔧 保养记录 |
-| `set_reminder` | `type, mode`（+ `interval_km`/`trigger_odometer`/`trigger_date`, `vehicle`, `note`） | 设提醒（spec 003） | 🔔 已设置提醒 |
+| `set_reminder` | `type, mode`（+ `interval_km`/`trigger_odometer`/`trigger_date`, `vehicle`, `note`） | 设提醒（spec 003；间隔模式触发后自动续期 spec 006） | 🔔 已设置提醒 |
 | `list_reminders` | 无（+ `vehicle`） | 列活跃提醒 | 🔔 提醒列表 |
 | `cancel_reminder` | `type`（+ `vehicle`） | 取消提醒 | ✅ 已取消 |
 | `update_last_fuel` | 无（+ 可改字段, `vehicle`） | 改最近一条加油记录（spec 004） | ✏️ 已修改 |
