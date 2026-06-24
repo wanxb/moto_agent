@@ -15,7 +15,12 @@ function buildSystemPrompt(): string {
 2. 只有总价没有升数时（如"加了 100 块"），先询问升数再调用
 3. 查询请求根据描述选择时间范围：本月、最近 N 次、某段时间等
 4. 工具返回的格式化结果直接回复给用户，不要重新描述
-5. 回复简洁，中文`;
+5. 回复简洁，中文
+
+多车规则：
+6. 用户可能管理多辆车。消息里提到车名时，把车名作为 vehicle 参数传给对应工具；没提到则不传（工具会用默认车）
+7. 工具返回提示需要指明车辆时，按提示向用户反问是哪辆车
+8. "我有哪些车"用 list_vehicles；"添加车 xxx"用 add_vehicle；"默认车设成 xxx"用 set_default_vehicle`;
 }
 
 export async function agentLoop(messages: Message[], env: Env): Promise<string> {

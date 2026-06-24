@@ -51,5 +51,15 @@ export interface FuelRecord {
   price_total: number;
   fuel_type: string;
   note: string | null;
+  vehicle_id: number | null;
+  created_at: string;
+}
+
+export interface Vehicle {
+  id: number;
+  name: string;
+  is_default: number;   // 0 | 1
+  is_active: number;    // 0 | 1
+  user_id: number | null;
   created_at: string;
 }

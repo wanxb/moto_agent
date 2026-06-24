@@ -2,6 +2,14 @@
 
 export async function initDB(db: D1Database): Promise<void> {
   await db.batch([
+    db.prepare(`CREATE TABLE IF NOT EXISTS vehicles (
+      id          INTEGER PRIMARY KEY AUTOINCREMENT,
+      name        TEXT    NOT NULL,
+      is_default  INTEGER NOT NULL DEFAULT 0,
+      is_active   INTEGER NOT NULL DEFAULT 1,
+      user_id     INTEGER,
+      created_at  TEXT    NOT NULL DEFAULT (datetime('now'))
+    )`),
     db.prepare(`CREATE TABLE IF NOT EXISTS fuel_records (
       id          INTEGER PRIMARY KEY AUTOINCREMENT,
       date        TEXT    NOT NULL,
@@ -10,6 +18,7 @@ export async function initDB(db: D1Database): Promise<void> {
       price_total REAL    NOT NULL,
       fuel_type   TEXT    NOT NULL DEFAULT '95',
       note        TEXT,
+      vehicle_id  INTEGER,
       created_at  TEXT    NOT NULL DEFAULT (datetime('now'))
     )`),
     db.prepare(`CREATE TABLE IF NOT EXISTS mileage_records (
@@ -17,6 +26,7 @@ export async function initDB(db: D1Database): Promise<void> {
       date        TEXT    NOT NULL,
       odometer    REAL    NOT NULL,
       note        TEXT,
+      vehicle_id  INTEGER,
       created_at  TEXT    NOT NULL DEFAULT (datetime('now'))
     )`),
   ]);
@@ -26,6 +36,7 @@ export async function clearDB(db: D1Database): Promise<void> {
   await db.batch([
     db.prepare('DELETE FROM fuel_records'),
     db.prepare('DELETE FROM mileage_records'),
+    db.prepare('DELETE FROM vehicles'),
   ]);
 }
 
