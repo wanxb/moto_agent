@@ -53,6 +53,7 @@ agentLoop(messages):
 | `add_vehicle` | `name` | 添加车辆（首辆自动设默认） | ✅ 已添加 |
 | `list_vehicles` | 无 | 列出全部车辆 | 🏍 车辆列表 |
 | `set_default_vehicle` | `name` | 切换默认车 | ✅ 已切换 |
+| `rename_vehicle` | `name, new_name` | 车辆改名（spec 005，历史记录自动显示新名） | ✅ 已改名 |
 | `log_maintenance` | `date, type`（+ `odometer`, `cost`, `note`, `vehicle`） | 记录保养（spec 002） | ✅ 已记录保养 |
 | `query_maintenance` | 无（+ `type`, `last_only`, `vehicle`） | 查询保养历史 / 某类型最近一次 | 🔧 保养记录 |
 | `set_reminder` | `type, mode`（+ `interval_km`/`trigger_odometer`/`trigger_date`, `vehicle`, `note`） | 设提醒（spec 003） | 🔔 已设置提醒 |

@@ -2,7 +2,7 @@ import { ToolDefinition, Vehicle } from './types';
 import {
   insertFuelRecord, insertMileageRecord,
   getLastFuelRecord, getRecentFuelRecords, getFuelRecordsByDateRange,
-  insertVehicle, getVehicleByName, listVehicles, getDefaultVehicle, setDefaultVehicle,
+  insertVehicle, getVehicleByName, listVehicles, getDefaultVehicle, setDefaultVehicle, renameVehicle,
   insertMaintenanceRecord, getMaintenanceRecords, getLastMaintenanceByType,
   insertReminder, listRemindersByVehicle, cancelReminders, getLatestOdometer,
   updateFuelRecord, softDeleteFuelRecord,
@@ -111,6 +111,21 @@ export const TOOLS: ToolDefinition[] = [
           name: { type: 'string', description: '要设为默认的车辆名称' },
         },
         required: ['name'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'rename_vehicle',
+      description: '给已有车辆改名。用户说"把X改名叫Y""X改成Y"时调用。',
+      parameters: {
+        type: 'object',
+        properties: {
+          name:     { type: 'string', description: '车辆当前名称' },
+          new_name: { type: 'string', description: '新名称' },
+        },
+        required: ['name', 'new_name'],
       },
     },
   },
@@ -245,6 +260,7 @@ export async function dispatchTool(
     case 'add_vehicle':         return addVehicle(input, db);
     case 'list_vehicles':       return listVehiclesTool(db);
     case 'set_default_vehicle': return setDefaultVehicleTool(input, db);
+    case 'rename_vehicle':      return renameVehicleTool(input, db);
     case 'log_maintenance':     return logMaintenance(input, db);
     case 'query_maintenance':   return queryMaintenance(input, db);
     case 'set_reminder':        return setReminder(input, db);
@@ -431,6 +447,20 @@ async function setDefaultVehicleTool(input: Record<string, unknown>, db: D1Datab
   if (!v) return `没有找到车辆「${name}」。`;
   await setDefaultVehicle(db, v.id);
   return `✅ 已将默认车设为「${name}」。`;
+}
+
+async function renameVehicleTool(input: Record<string, unknown>, db: D1Database): Promise<string> {
+  const { name, new_name } = input as { name: string; new_name: string };
+  if (name === new_name) return `新旧名称相同，无需修改。`;
+
+  const v = await getVehicleByName(db, name);
+  if (!v) return `没有找到车辆「${name}」。`;
+
+  const clash = await getVehicleByName(db, new_name);
+  if (clash) return `已存在车辆「${new_name}」，换个名字吧。`;
+
+  await renameVehicle(db, v.id, new_name);
+  return `✅ 已将车辆「${name}」改名为「${new_name}」。`;
 }
 
 // ── Maintenance tools (spec 002) ──────────────────────────────────────────────

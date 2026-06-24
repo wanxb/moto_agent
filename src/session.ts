@@ -1,5 +1,6 @@
 import { Env, Message } from './types';
 import { agentLoop } from './agent';
+import { toPlainText } from './format';
 
 const SESSION_TTL = 3600;
 export const MAX_SESSION_MESSAGES = 10;
@@ -28,5 +29,6 @@ export async function runAgent(
   const trimmed = messages.slice(-MAX_SESSION_MESSAGES);
   await env.SESSION_KV.put(key, JSON.stringify(trimmed), { expirationTtl: SESSION_TTL });
 
-  await ctx.reply(reply);
+  // Telegram 按纯文本显示，清洗掉 LLM 可能产生的 markdown 符号（保留 emoji）
+  await ctx.reply(toPlainText(reply));
 }

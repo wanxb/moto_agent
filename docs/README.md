@@ -84,5 +84,6 @@ moto_agent/
 | `specs/002-maintenance` | ✔️ 已实现 | Phase 2 P1，维保记录，代码+测试已落地，待线上部署 |
 | `specs/003-reminders` | ✔️ 已实现 | Phase 2 P1，定时提醒（Cron Triggers，首个非 webhook 入口），待部署 |
 | `specs/004-record-edit` | ✔️ 已实现 | Phase 2 P2，记录纠错/软删除，待部署 |
+| `specs/005-rename-and-plaintext` | ✔️ 已实现 | 上线后反馈：车辆改名 + Telegram 纯文本输出（去 markdown 保 emoji） |
 | `specs/backlog.md` | 🟡 概览 | 其余功能（语音/导出/Dashboard）待详写 |
 | `product/*` · `process/*` | ✅ 初版 | — |

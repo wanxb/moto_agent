@@ -224,3 +224,40 @@ describe('legacy single-vehicle mode (no vehicles created)', () => {
     expect(result).toContain('2.00 L/100km');
   });
 });
+
+// ── rename_vehicle (spec 005) ─────────────────────────────────────────────────
+
+describe('rename_vehicle (tools)', () => {
+  it('AC-A1 — renames an existing vehicle', async () => {
+    await dispatchTool('add_vehicle', { name: '小绿' }, env.DB);
+    const result = await dispatchTool('rename_vehicle', { name: '小绿', new_name: '大绿' }, env.DB);
+    expect(result).toContain('已将车辆「小绿」改名为「大绿」');
+    expect(await getVehicleByName(env.DB, '大绿')).not.toBeNull();
+    expect(await getVehicleByName(env.DB, '小绿')).toBeNull();
+  });
+
+  it('AC-A2 — historical records show the new name after rename', async () => {
+    const green = await insertVehicle(env.DB, '小绿', true);
+    await insertFuelRecord(env.DB, { date: '2026-05-01', odometer: 9000, liters: 10, price_total: 97, vehicle_id: green });
+    await insertFuelRecord(env.DB, { date: '2026-06-01', odometer: 9500, liters: 9, price_total: 88, vehicle_id: green });
+
+    await dispatchTool('rename_vehicle', { name: '小绿', new_name: '大绿' }, env.DB);
+    // 历史记录关联 id，统计表头显示新名
+    const stats = await dispatchTool('query_stats', { mode: 'recent', count: 5, vehicle: '大绿' }, env.DB);
+    expect(stats).toContain('📊 大绿 · 油耗统计');
+    expect(stats).toContain('2.00 L/100km');
+  });
+
+  it('AC-A3 — rejects rename to an existing name', async () => {
+    await dispatchTool('add_vehicle', { name: '小绿' }, env.DB);
+    await dispatchTool('add_vehicle', { name: '通勤车' }, env.DB);
+    const result = await dispatchTool('rename_vehicle', { name: '小绿', new_name: '通勤车' }, env.DB);
+    expect(result).toContain('已存在车辆「通勤车」');
+    expect(await getVehicleByName(env.DB, '小绿')).not.toBeNull();   // 未改
+  });
+
+  it('AC-A4 — rejects rename of non-existent vehicle', async () => {
+    const result = await dispatchTool('rename_vehicle', { name: '幽灵车', new_name: '大绿' }, env.DB);
+    expect(result).toContain('没有找到车辆「幽灵车」');
+  });
+});

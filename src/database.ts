@@ -100,6 +100,10 @@ export async function countVehicles(db: D1Database): Promise<number> {
   return row?.n ?? 0;
 }
 
+export async function renameVehicle(db: D1Database, id: number, newName: string): Promise<void> {
+  await db.prepare('UPDATE vehicles SET name = ? WHERE id = ?').bind(newName, id).run();
+}
+
 // 默认车不变量：同一时刻仅一辆 is_default=1。清零 + 置位放在一个 batch 内保证原子。
 export async function setDefaultVehicle(db: D1Database, id: number): Promise<void> {
   await db.batch([

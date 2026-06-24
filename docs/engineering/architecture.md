@@ -47,7 +47,8 @@
 |------|------|------|--------|
 | **Webhook 入口** | `src/index.ts` | grammY bot、webhook secret 校验、命令路由（`/start` `/help` `/last` `/stats`）、访问控制中间件 | 业务逻辑 |
 | **定时入口** | `src/index.ts` `scheduled()` + `src/scheduled.ts` | Cron Triggers 唤醒，扫描到期提醒并主动推送（spec 003） | 业务计算、SQL |
-| **会话编排** | `src/session.ts` | KV 读写、调用 Agent Loop、截断历史、回复 | LLM 细节、SQL |
+| **会话编排** | `src/session.ts` | KV 读写、调用 Agent Loop、回复前 `toPlainText` 清洗 markdown（spec 005）、截断历史 | LLM 细节、SQL |
+| **输出格式化** | `src/format.ts` | `toPlainText`：去 markdown 保留 emoji，供 Telegram 纯文本显示 | 业务逻辑 |
 | **Agent Loop** | `src/agent.ts` | system prompt、`while` 循环、工具调度、轮数护栏 | 具体工具实现、HTTP |
 | **LLM 适配** | `src/llm.ts` | DeepSeek/Anthropic 双 provider、重试、fallback、消息格式互转 | 业务、存储 |
 | **工具层** | `src/tools.ts` | 工具 JSON Schema 定义、`dispatchTool` 分发、业务计算（油耗等） | SQL 细节 |
