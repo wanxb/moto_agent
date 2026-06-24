@@ -13,7 +13,7 @@
 - **形态**：Telegram Bot（webhook 模式），无前端页面。
 - **运行时**：Cloudflare Workers（边缘 Serverless，单请求无状态）。
 - **AI**：自实现 Agent Loop（`while` 循环 + 工具调度），DeepSeek V3 主、Claude Sonnet 备，自动 fallback。
-- **状态**：MVP 已跑通，49 个测试通过。当前正在为 **Phase 2 功能扩展**做准备。
+- **状态**：MVP 已跑通，205 个测试通过。Phase 2 功能扩展已全部完成，进入 Phase 3 多用户规划。
 
 完整背景：[`docs/PRD.md`](docs/PRD.md) · [`docs/engineering/architecture.md`](docs/engineering/architecture.md)
 
@@ -23,7 +23,7 @@
 
 1. **改动前先看 spec。** 任何非平凡功能改动，先确认 [`docs/specs/`](docs/specs/) 下有没有对应规格；没有就先按 [`docs/specs/README.md`](docs/specs/README.md) 的 SDD 流程补 `requirements → design → tasks`，再写代码。
 2. **保持无状态思维。** Workers 每个请求独立、可能跨数据中心。**不要**用模块级变量存跨请求状态——会话历史一律走 `SESSION_KV`，业务数据一律走 `DB`（D1）。
-3. **工具是 Agent 与世界的唯一接口。** 新增能力 = 新增一个工具（`src/tools.ts`），而不是在 `agent.ts` 里塞 if-else。工具契约见 [`docs/engineering/agent-design.md`](docs/engineering/agent-design.md)。
+3. **工具是 Agent 与世界的唯一接口。** 新增能力 = 新增一个工具（`src/tools/` 目录），而不是在 `agent.ts` 里塞 if-else。工具契约见 [`docs/engineering/agent-design.md`](docs/engineering/agent-design.md)。
 4. **两个 LLM provider 必须同时支持。** 任何改 `src/llm.ts` 的改动，DeepSeek（OpenAI 兼容格式）和 Anthropic（messages 格式）两条路径都要测到，消息格式转换不能漏。
 5. **不写注释解释"做了什么"，写注释解释"为什么"。** 代码风格匹配现有文件（见 §6）。
 6. **改完必须 `npm run type-check && npm test` 全绿**，否则任务不算完成（见 [`docs/process/definition-of-done.md`](docs/process/definition-of-done.md)）。
@@ -36,7 +36,7 @@
 ```bash
 npm install              # 安装依赖
 npm run dev              # 本地启动 Worker（wrangler dev）
-npm test                 # 跑全部测试（vitest run，当前 49 个）
+npm test                 # 跑全部测试（vitest run，当前 205 个）
 npm run test:watch       # 监听模式
 npm run type-check       # tsc --noEmit，类型检查
 npm run db:init          # 初始化本地 D1（docs/schema.sql）
@@ -55,18 +55,24 @@ npm run deploy           # 部署到 Cloudflare Workers
 | 文件 | 职责 | 改动时注意 |
 |------|------|-----------|
 | `src/index.ts` | Workers 入口；grammY bot、webhook 鉴权、命令路由、访问控制中间件 | 改鉴权要同步更新 [`docs/engineering/security.md`](docs/engineering/security.md) |
-| `src/session.ts` | 会话编排：读写 `SESSION_KV`、调用 agentLoop、回复用户 | KV 截断逻辑（`MAX_SESSION_MESSAGES`）在这里 |
-| `src/agent.ts` | Agent Loop 核心：system prompt、`while` 循环、工具分发、轮数上限 | `MAX_ROUNDS` 是 Workers 超时护栏，别随意调大 |
-| `src/tools.ts` | 工具定义（JSON Schema）+ 实现 + `dispatchTool` 分发表 | **新增能力的主战场**，见 §5 |
+| `src/session.ts` | 会话编排：读写 `SESSION_KV`、调用 agentLoop、回复用户 | KV 截断逻辑（`MAX_SESSION_MESSAGES`）在这里；语言检测/存储见 `src/i18n/` |
+| `src/agent.ts` | Agent Loop 核心：system prompt、`while` 循环、工具分发、轮数上限 | `MAX_ROUNDS` 是 Workers 超时护栏；`lang` 参数传递给工具和 prompt |
+| `src/tools/` | 工具系统：`interface.ts`(Tool 接口+Registry)、`index.ts`(注册)、`fuel-tools.ts`、`vehicle-tools.ts` 等 | **新增能力的主战场**，见 §5；工具 `execute` 接受 `lang` 参数 |
 | `src/llm.ts` | 双 provider 封装：DeepSeek 主、Anthropic 备、重试与 fallback、消息格式互转 | 两条路径都要测；fallback 触发条件见注释 |
-| `src/database.ts` | D1 数据访问层（纯 SQL，无业务逻辑） | 业务计算放 `tools.ts`，这里只做 CRUD |
-| `src/types.ts` | 全局类型：`Env`、`Message`、工具/LLM 接口、`FuelRecord` | 改 Env 要同步 `wrangler.toml` 和 `test/utils.ts` |
+| `src/database.ts` | D1 数据访问层（纯 SQL，无业务逻辑） | 业务计算放 `src/tools/`，这里只做 CRUD |
+| `src/types.ts` | 全局类型：`Env`、`Message`、工具/LLM 接口、`FuelRecord`、`Vehicle` | 改 Env 要同步 `wrangler.toml` 和 `test/utils.ts` |
+| `src/i18n/` | 国际化：`zh.ts`/`en.ts` 字典、`t()` 翻译、`fmtNumber/fmtKm/fmtCost`、`getLang/setLang` | 新增用户文字必须进字典；支持 `{0}` 占位参数 |
+| `src/prompts.ts` | 系统提示词：`buildSystemPrompt(lang)` 中英双语 | 改提示词要同步更新两个语言版本 |
+| `src/config.ts` | 集中配置：`MAX_ROUNDS`、模型 ID、`SESSION_TTL`、可编辑列白名单等 | 改值要评估影响范围 |
+| `src/scheduled.ts` | Cron 定时任务：到期提醒扫描 + 推送 + 自动续期 | 推送文案目前默认中文（cron 无用户上下文） |
+| `src/stt.ts` | 语音转文字：Cloudflare Workers AI Whisper | `language` 参数跟随用户语言偏好 |
+| `src/format.ts` | Markdown → 纯文本清洗 | Telegeram 回复前调用 |
 | `docs/schema.sql` | D1 建表脚本 | 改 schema 必须走迁移流程，见 [`docs/engineering/data-model.md`](docs/engineering/data-model.md) |
 | `test/*.test.ts` | 单元/集成测试（vitest + workers pool） | 新功能必须带测试 |
 | `test/utils.ts` | 测试用 `initDB`/`clearDB`/`makeEnv` | 改 schema 时这里的建表语句要同步 |
 | `scripts/seed-fuel.ts` | 历史数据导入脚本 | — |
 
-数据流一句话：`Telegram → index.ts(鉴权) → session.ts(KV读) → agent.ts(Loop) → llm.ts(模型) ⇄ tools.ts → database.ts(D1) → session.ts(KV写) → 回复`。
+数据流一句话：`Telegram → index.ts(鉴权+语言检测) → session.ts(KV读+lang) → agent.ts(Loop+lang) → llm.ts(模型) ⇄ tools/(lang) → database.ts(D1) → session.ts(KV写) → 回复`。
 
 ---
 
@@ -77,7 +83,7 @@ npm run deploy           # 部署到 Cloudflare Workers
 1. **先有 spec**：在 [`docs/specs/`](docs/specs/) 找到或创建该功能的规格（见 [`docs/specs/README.md`](docs/specs/README.md)）。
 2. **（如需）改数据模型**：按 [`docs/engineering/data-model.md`](docs/engineering/data-model.md) 写**只加不删**的迁移；同步更新 `docs/schema.sql` 和 `test/utils.ts` 的建表语句。
 3. **数据访问层**：在 `src/database.ts` 加纯 SQL 函数。
-4. **定义工具**：在 `src/tools.ts` 的 `TOOLS` 数组加 JSON Schema 定义，在 `dispatchTool` 加分发分支，并实现处理函数（业务计算在这里）。
+4. **定义工具**：在 `src/tools/` 创建或扩展工具类（实现 `Tool` 接口），在 `src/tools/index.ts` 注册。输出文案用 `t('key', lang, ...args)` 支持双语。
 5. **接入 prompt**：如有必要，在 `src/agent.ts` 的 `buildSystemPrompt()` 增加该工具的使用规则（保持精简，描述放工具 `description` 里）。
 6. **写测试**：`test/tools.test.ts`（工具逻辑）、必要时 `test/database.test.ts`。LLM 相关用 mock，不打真实 API。
 7. **门禁**：`npm run type-check && npm test` 全绿。

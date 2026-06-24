@@ -14,6 +14,11 @@ CREATE TABLE vehicles (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
     name        TEXT    NOT NULL,               -- 车名，如"Honda NS125LA"
     alias       TEXT,                           -- 简称/别名，如"小拉"（spec 009，可空）
+    brand       TEXT,                           -- 品牌，如"Honda"（spec 011）
+    model       TEXT,                           -- 型号，如"NS125LA"（spec 011）
+    fuel_type   TEXT,                           -- 常用油号，如"95"（spec 011）
+    tank_capacity REAL,                         -- 油箱容量(L)（spec 011）
+    color       TEXT,                           -- 车身颜色（spec 011）
     is_default  INTEGER NOT NULL DEFAULT 0,     -- 1=默认车（同一时刻仅一辆）
     is_active   INTEGER NOT NULL DEFAULT 1,     -- 软删除预留
     user_id     INTEGER,                        -- Phase 3 多用户预留
@@ -160,6 +165,7 @@ CREATE INDEX idx_vehicles_default ON vehicles(is_default);
 > | [`0004_soft_delete.sql`](../../migrations/0004_soft_delete.sql) | 软删除：`fuel_records` 加 `deleted_at`（前向一次性，ALTER 非幂等） | [spec 004](../specs/004-record-edit/) |
 > | [`0005_reminder_interval.sql`](../../migrations/0005_reminder_interval.sql) | 提醒续期：`reminders` 加 `interval_km`（前向一次性） | [spec 006](../specs/006-hardening/) |
 > | [`0006_vehicle_alias.sql`](../../migrations/0006_vehicle_alias.sql) | 车辆别名：`vehicles` 加 `alias` + 唯一索引（前向一次性） | [spec 009](../specs/009-vehicle-alias/) |
+> | [`0007_vehicle_attributes.sql`](../../migrations/0007_vehicle_attributes.sql) | 车辆属性扩展：`vehicles` 加 `brand`/`model`/`fuel_type`/`tank_capacity`/`color`（前向一次性） | [spec 011](../specs/011-vehicle-attributes/) |
 
 ---
 
@@ -181,6 +187,7 @@ CREATE INDEX idx_vehicles_default ON vehicles(is_default);
 | **Phase 2 维保** ✅ | 新增 `maintenance_records` 表（绑定 `vehicle_id`） | 已实现，见 [迁移 0002](../../migrations/0002_maintenance.sql) · [spec 002](../specs/002-maintenance/) |
 | **Phase 2 提醒** ✅ | 新增 `reminders` 表（绑定 `vehicle_id`，`chat_id` 预留多用户） | 已实现，见 [迁移 0003](../../migrations/0003_reminders.sql) · [spec 003](../specs/003-reminders/) |
 | **Phase 2 纠错** ✅ | `fuel_records` 加 `deleted_at`（软删除，读路径过滤） | 已实现，见 [迁移 0004](../../migrations/0004_soft_delete.sql) · [spec 004](../specs/004-record-edit/) |
+| **Phase 2 车辆属性** ✅ | `vehicles` 加 `brand`/`model`/`fuel_type`/`tank_capacity`/`color` | 已实现，见 [迁移 0007](../../migrations/0007_vehicle_attributes.sql) · [spec 011](../specs/011-vehicle-attributes/) |
 | **Phase 3 多用户** | 新增 `users` 表（存 `chat_id`）；各表加 `user_id` | 数据隔离前提，需先做 [security](security.md) 设计 |
 | **Phase 4** | 时序数据（OBD/GPS），可能引入独立存储 | 视数据量 |
 

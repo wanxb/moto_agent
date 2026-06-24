@@ -1,6 +1,6 @@
 # 测试策略
 
-> 框架：`vitest` + `@cloudflare/vitest-pool-workers`（真实 Miniflare，含 D1/KV）。当前 135 个测试，覆盖 LLM、工具逻辑、多车/维保/提醒/纠错、语音 STT、会话持久化、Webhook 鉴权。
+> 框架：`vitest` + `@cloudflare/vitest-pool-workers`（真实 Miniflare，含 D1/KV）。当前 205 个测试，覆盖 LLM、工具逻辑、多车/维保/提醒/纠错、语音 STT、会话持久化、Webhook 鉴权。
 >
 > **测试用 `wrangler.test.toml`**（非生产 `wrangler.toml`）：去掉 `[ai]` 绑定——Workers AI 需外部代理，本地测试运行时无法解析（`__WRANGLER_EXTERNAL_AI_WORKER`）。语音测试 mock `env.AI`（`test/stt.test.ts`）。改生产 bindings 时注意两份配置一致。
 
@@ -30,6 +30,8 @@
 | `test/llm.test.ts` | DeepSeek/Anthropic 调用、重试、fallback、消息格式互转 |
 | `test/session.test.ts` | KV 读写、历史截断、会话持久化 |
 | `test/agent.test.ts` | Agent Loop 轮次、工具回灌、终止条件 |
+| `test/i18n.test.ts` | 翻译函数 `t()`、语言切换 `set_language` 工具、工具描述中英双选（spec 010） |
+| `test/vehicle-attributes.test.ts` | 车辆属性 CRUD（brand/model/fuel_type/tank_capacity/color）工具（spec 011） |
 | `test/utils.ts` | 共享：`initDB` / `clearDB` / `makeEnv`（**改 schema 时同步**） |
 
 ---

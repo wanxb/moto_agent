@@ -2,7 +2,7 @@
 
 **版本：** v0.2  
 **日期：** 2026-06-23  
-**状态：** 草稿
+**状态：** Phase 2 功能完善（已实现，205 测试通过）
 
 ---
 
@@ -283,9 +283,15 @@ moto_agent/
 ├── src/
 │   ├── index.ts          # Workers 入口 + webhook handler
 │   ├── agent.ts          # Agent Loop 核心
-│   ├── tools.ts          # 4 个工具实现
+│   ├── tools/            # 工具定义与实现（按功能拆分）
+│   ├── i18n/             # 国际化翻译框架（zh/en，KV 存语言偏好）
+│   ├── prompts.ts        # 系统提示（中英双语）
 │   ├── database.ts       # D1 操作层
 │   ├── llm.ts            # DeepSeek/Anthropic 双模型封装
+│   ├── session.ts        # 会话编排（KV 读写、agentLoop 调用）
+│   ├── stt.ts            # 语音转写（Workers AI Whisper）
+│   ├── format.ts         # 输出格式化（去 markdown 保 emoji）
+│   ├── scheduled.ts      # Cron Triggers（定时提醒）
 │   └── types.ts          # 类型定义
 ├── docs/schema.sql       # D1 建表脚本
 ├── wrangler.toml         # Cloudflare 配置
@@ -357,12 +363,12 @@ curl "https://api.telegram.org/bot{TOKEN}/setWebhook?url=https://moto-agent.{use
 **目标**：跑通核心链路，个人使用验证价值
 
 - [x] 技术选型确定（DeepSeek 主 + Claude 备，Cloudflare Workers）
-- [ ] D1 schema 初始化 + wrangler 配置
-- [ ] Agent Loop（TypeScript）+ 4 个工具实现
-- [ ] DeepSeek/Anthropic 双模型封装 + fallback 逻辑
-- [ ] Telegram webhook handler（grammy）
-- [ ] Cloudflare Workers 部署 + webhook 注册
-- [ ] 自然语言记录 + 基础查询端到端测试
+- [x] D1 schema 初始化 + wrangler 配置
+- [x] Agent Loop（TypeScript）+ 4 个工具实现
+- [x] DeepSeek/Anthropic 双模型封装 + fallback 逻辑
+- [x] Telegram webhook handler（grammy）
+- [x] Cloudflare Workers 部署 + webhook 注册
+- [x] 自然语言记录 + 基础查询端到端测试
 
 **验收标准**：能在 Telegram 中用自然语言完成加油记录，并查询油耗统计，DeepSeek 不可用时自动切换到 Claude 继续服务。
 

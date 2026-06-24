@@ -37,7 +37,7 @@ agentLoop(messages):
 
 ### 工具的四要素
 
-1. **定义**（`TOOLS` 数组，`src/tools.ts`）：OpenAI function-calling 格式的 JSON Schema。
+1. **定义**（`TOOLS` 数组，`src/tools/`）：OpenAI function-calling 格式的 JSON Schema。
 2. **分发**（`dispatchTool` switch）：`name → 处理函数`。
 3. **实现**（处理函数）：业务计算 + 调 `database.ts`，返回**给用户看的最终字符串**。
 4. **（可选）prompt 规则**（`agent.ts` 的 `buildSystemPrompt`）：何时调用该工具的高层指引。
@@ -92,6 +92,12 @@ agentLoop(messages):
 - **指定输出语言与风格**：中文、简洁。
 
 新增工具时若需要新规则，**加最小必要的一两条**，不要让 prompt 膨胀。
+
+`buildSystemPrompt(lang)` 支持 `zh`/`en` 双语参数，按用户 KV 语言偏好生成对应语言的系统提示。国际化详见 [ADR-0008](adr/0008-i18n-bilingual.md) 与 [spec 010](../specs/010-i18n/)。
+
+### 工具描述双语
+
+所有工具的 `description` 保留中文为主/fallback，新增可选 `descriptionEn` 字段提供英文描述。`ToolRegistry.toOpenAI(lang)` 按 lang 参数选取对应版本返回给 LLM，工具自身接口不改动。
 
 ---
 

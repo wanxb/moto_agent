@@ -46,9 +46,11 @@
 
 ## 7. 用户可见文案
 
+- 支持中英双语：i18n 文案使用 `t('key', lang, ...args)` 模式获取翻译，翻译字典统一在 `src/i18n/` 维护。
 - **中文**，简洁。
 - 沿用现有 emoji 风格：✅ 成功 · ⛽ 加油 · 📊 统计 · 🕐 时间/最近 · 📍 里程 · 🏍 车辆。
 - 数字格式化沿用现有（`toLocaleString('zh')`、`toFixed(2)`）。
+- 工具描述：`description` 保留中文为主/fallback，可选 `descriptionEn` 提供英文版描述，`ToolRegistry.toOpenAI(lang)` 按语言偏好选取。
 
 ## 8. 注释
 

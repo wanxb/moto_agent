@@ -31,7 +31,17 @@ moto_agent/
     ├── specs/                  规格层：规范驱动开发（SDD）
     │   ├── README.md           SDD 流程与规格索引
     │   ├── _template/          requirements/design/tasks 模板
-    │   ├── 001-multi-vehicle/  近期详写规格（多车管理）
+    │   ├── 001-multi-vehicle/  多车管理
+    │   ├── 002-maintenance/    维修保养记录
+    │   ├── 003-reminders/      定时提醒
+    │   ├── 004-record-edit/    记录纠错/软删除
+    │   ├── 005-rename-and-plaintext/  车辆改名 + 纯文本输出
+    │   ├── 006-hardening/      质量加固（埋点/评测）
+    │   ├── 007-reminder-replace-and-context/  提醒去重 + 会话截断
+    │   ├── 008-voice-input/    语音输入（Workers AI Whisper）
+    │   ├── 009-vehicle-alias/  车辆别名
+    │   ├── 010-i18n/           国际化（中英双语）
+    │   ├── 011-vehicle-attributes/  车辆属性扩展
     │   └── backlog.md          其余功能的概览级简报
     └── process/                流程层：怎么协作
         ├── coding-standards.md 编码规范
@@ -81,7 +91,7 @@ moto_agent/
 |------|------|------|
 | `PRD.md` | ✅ v0.2 | MVP 产品定义，现有 |
 | `engineering/*` | ✅ 初版 | 基于 MVP 实现整理 |
-| `engineering/adr/0001-0005` | ✅ 已记录 | MVP 关键决策回溯 |
+| `engineering/adr/0001-0009` | ✅ 已记录 | MVP + Phase 2 关键决策回溯 |
 | `specs/001-multi-vehicle` | ✔️ 已实现 | Phase 2 P0，代码+测试已落地，待线上部署 |
 | `specs/002-maintenance` | ✔️ 已实现 | Phase 2 P1，维保记录，代码+测试已落地，待线上部署 |
 | `specs/003-reminders` | ✔️ 已实现 | Phase 2 P1，定时提醒（Cron Triggers，首个非 webhook 入口），待部署 |
@@ -91,6 +101,7 @@ moto_agent/
 | `specs/007-reminder-replace-and-context` | ✔️ 已实现 | 修复：set_reminder 同类替换不叠加 + 会话历史按回合截断 |
 | `specs/008-voice-input` | ✔️ 已实现 | 语音输入：Telegram 语音→Workers AI Whisper→现有链路，回显识别文本 |
 | `specs/009-vehicle-alias` | ✔️ 已实现 | 车辆别名/简称（如"Honda NS125LA"→"小拉"），待部署 |
-| `specs/010-i18n` | 📋 Planned | 国际化中英双语，KV 存语言偏好，待实施 · [ADR-0008](engineering/adr/0008-i18n-bilingual.md) |
+| `specs/010-i18n` | ✔️ 已实现 | 国际化中英双语，KV 存语言偏好 · [ADR-0008](engineering/adr/0008-i18n-bilingual.md) |
+| `specs/011-vehicle-attributes` | ✔️ 已实现 | 车辆属性扩展（品牌/型号/油号/油箱容量/颜色），待部署 |
 | `specs/backlog.md` | 🟡 概览 | 其余功能（导出/Dashboard）待详写 |
 | `product/*` · `process/*` | ✅ 初版 | — |

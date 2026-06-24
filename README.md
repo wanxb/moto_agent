@@ -50,7 +50,7 @@ npm run dev
 npm test
 ```
 
-共 135 个测试，覆盖 LLM 调用、工具逻辑、多车管理、维保记录、定时提醒、记录纠错、语音 STT、会话持久化、Webhook 鉴权。
+共 205 个测试，覆盖 LLM 调用、工具逻辑、多车管理、维保记录、定时提醒、记录纠错、语音 STT、会话持久化、Webhook 鉴权。
 
 ## 部署
 
@@ -91,6 +91,9 @@ wrangler d1 execute moto-agent-db --remote --file=migrations/0001_multi_vehicle.
 wrangler d1 execute moto-agent-db --remote --file=migrations/0002_maintenance.sql
 wrangler d1 execute moto-agent-db --remote --file=migrations/0003_reminders.sql
 wrangler d1 execute moto-agent-db --remote --file=migrations/0004_soft_delete.sql
+wrangler d1 execute moto-agent-db --remote --file=migrations/0005_reminder_interval.sql
+wrangler d1 execute moto-agent-db --remote --file=migrations/0006_vehicle_alias.sql
+wrangler d1 execute moto-agent-db --remote --file=migrations/0007_vehicle_attributes.sql
 ```
 
 油耗计算采用 fill-to-fill 法：`上次加油量 / 本次区间里程 × 100`。

@@ -9,7 +9,7 @@
 | 阶段 | 主题 | 时间锚点 | 状态 |
 |------|------|---------|------|
 | **Phase 1** | MVP：跑通核心链路 | 已完成 | ✅ Done |
-| **Phase 2** | 功能完善：扩展记录维度与便利性 | 当前（2026 H2） | 🚧 进行中 |
+| **Phase 2** | 功能完善：扩展记录维度与便利性 | 2026 H1 | ✅ 已完成（代码+测试落地，待线上部署） |
 | **Phase 3** | 多用户 + 可视化 | 2026 末 – 2027 H1 | 📋 规划 |
 | **Phase 4** | 智能化与生态 | 2027+ | 💭 设想 |
 
@@ -36,8 +36,13 @@
 | **P1** | 定时提醒（保养/保险） | 高 | 中（引入 Cron Triggers） | 维保记录 ✔️ | [`../specs/003-reminders/`](../specs/003-reminders/) ✔️ 已实现（待部署） |
 | **P2** | 记录纠错/删除 | 中（数据质量） | 低 | 无 | [`../specs/004-record-edit/`](../specs/004-record-edit/) ✔️ 已实现（待部署） |
 | **P2** | 语音输入 | 中（便利性） | 中（Workers AI Whisper，无需转码） | 无 | [`../specs/008-voice-input/`](../specs/008-voice-input/) ✔️ 已实现（待部署） |
+| **P2** | 车辆改名 + 纯文本输出 | 中（体验） | 低 | 无 | [`../specs/005-rename-and-plaintext/`](../specs/005-rename-and-plaintext/) ✔️ 已实现 |
+| **P2** | 质量加固（评测/续期） | 中（质量保障） | 中 | 无 | [`../specs/006-hardening/`](../specs/006-hardening/) ✔️ 已实现 |
+| **P2** | 提醒去重 + 会话截断 | 中（可靠性修复） | 低 | 提醒 spec 003 | [`../specs/007-reminder-replace-and-context/`](../specs/007-reminder-replace-and-context/) ✔️ 已实现 |
+| **P2** | 车辆别名（简称） | 中（体验） | 低 | 多车 spec 001 | [`../specs/009-vehicle-alias/`](../specs/009-vehicle-alias/) ✔️ 已实现（待部署） |
+| **P2** | 国际化（中英双语） | 中（多客户端前提） | 中 | 无 | [ADR-0008](../engineering/adr/0008-i18n-bilingual.md) · [spec 010](../specs/010-i18n/) ✔️ 已实现 |
+| **P2** | 车辆属性扩展 | 中（数据完整度） | 低 | 多车 spec 001 | [`../specs/011-vehicle-attributes/`](../specs/011-vehicle-attributes/) ✔️ 已实现（待部署） |
 | **P3** | 数据导出（CSV） | 低 | 低 | 无 | [`../specs/backlog.md`](../specs/backlog.md) |
-| — | 国际化（中英双语） | 中（多客户端前提） | 中 | 无 | [ADR-0008](../engineering/adr/0008-i18n-bilingual.md) · [spec 010](../specs/010-i18n/) 📋 Planned |
 
 > **为什么多车优先**：它是 schema 演进的第一步（引入 `vehicles` 表 + 外键），维保、提醒、未来多用户都要挂在车辆维度上。先把这个数据基座打好，后续功能成本更低。详见 [ADR-0005 演进](../engineering/data-model.md)。
 
