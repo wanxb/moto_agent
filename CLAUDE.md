@@ -1,7 +1,7 @@
 # CLAUDE.md — Agent 操作手册
 
 > 本文件是 AI 编码助手（Claude Code 等）在本仓库工作的**首要操作手册**。
-> 人类开发者请从 [`docs/README.md`](docs/README.md) 开始；产品需求看根目录 [`PRD.md`](PRD.md)。
+> 人类开发者请从 [`docs/README.md`](docs/README.md) 开始；产品需求看 [`docs/PRD.md`](docs/PRD.md)。
 > 跨工具的 Agent（Cursor / Copilot 等）入口见 [`AGENTS.md`](AGENTS.md)，内容以本文件为准。
 
 ---
@@ -15,7 +15,7 @@
 - **AI**：自实现 Agent Loop（`while` 循环 + 工具调度），DeepSeek V3 主、Claude Sonnet 备，自动 fallback。
 - **状态**：MVP 已跑通，49 个测试通过。当前正在为 **Phase 2 功能扩展**做准备。
 
-完整背景：[`PRD.md`](PRD.md) · [`docs/engineering/architecture.md`](docs/engineering/architecture.md)
+完整背景：[`docs/PRD.md`](docs/PRD.md) · [`docs/engineering/architecture.md`](docs/engineering/architecture.md)
 
 ---
 
@@ -39,7 +39,7 @@ npm run dev              # 本地启动 Worker（wrangler dev）
 npm test                 # 跑全部测试（vitest run，当前 49 个）
 npm run test:watch       # 监听模式
 npm run type-check       # tsc --noEmit，类型检查
-npm run db:init          # 初始化本地 D1（schema.sql）
+npm run db:init          # 初始化本地 D1（docs/schema.sql）
 npm run db:init:remote   # 初始化线上 D1
 npm run deploy           # 部署到 Cloudflare Workers
 ```
@@ -61,7 +61,7 @@ npm run deploy           # 部署到 Cloudflare Workers
 | `src/llm.ts` | 双 provider 封装：DeepSeek 主、Anthropic 备、重试与 fallback、消息格式互转 | 两条路径都要测；fallback 触发条件见注释 |
 | `src/database.ts` | D1 数据访问层（纯 SQL，无业务逻辑） | 业务计算放 `tools.ts`，这里只做 CRUD |
 | `src/types.ts` | 全局类型：`Env`、`Message`、工具/LLM 接口、`FuelRecord` | 改 Env 要同步 `wrangler.toml` 和 `test/utils.ts` |
-| `schema.sql` | D1 建表脚本 | 改 schema 必须走迁移流程，见 [`docs/engineering/data-model.md`](docs/engineering/data-model.md) |
+| `docs/schema.sql` | D1 建表脚本 | 改 schema 必须走迁移流程，见 [`docs/engineering/data-model.md`](docs/engineering/data-model.md) |
 | `test/*.test.ts` | 单元/集成测试（vitest + workers pool） | 新功能必须带测试 |
 | `test/utils.ts` | 测试用 `initDB`/`clearDB`/`makeEnv` | 改 schema 时这里的建表语句要同步 |
 | `scripts/seed-fuel.ts` | 历史数据导入脚本 | — |
@@ -75,7 +75,7 @@ npm run deploy           # 部署到 Cloudflare Workers
 绝大多数功能扩展都遵循同一套路——**加工具**，而不是改循环。
 
 1. **先有 spec**：在 [`docs/specs/`](docs/specs/) 找到或创建该功能的规格（见 [`docs/specs/README.md`](docs/specs/README.md)）。
-2. **（如需）改数据模型**：按 [`docs/engineering/data-model.md`](docs/engineering/data-model.md) 写**只加不删**的迁移；同步更新 `schema.sql` 和 `test/utils.ts` 的建表语句。
+2. **（如需）改数据模型**：按 [`docs/engineering/data-model.md`](docs/engineering/data-model.md) 写**只加不删**的迁移；同步更新 `docs/schema.sql` 和 `test/utils.ts` 的建表语句。
 3. **数据访问层**：在 `src/database.ts` 加纯 SQL 函数。
 4. **定义工具**：在 `src/tools.ts` 的 `TOOLS` 数组加 JSON Schema 定义，在 `dispatchTool` 加分发分支，并实现处理函数（业务计算在这里）。
 5. **接入 prompt**：如有必要，在 `src/agent.ts` 的 `buildSystemPrompt()` 增加该工具的使用规则（保持精简，描述放工具 `description` 里）。
@@ -125,7 +125,7 @@ npm run deploy           # 部署到 Cloudflare Workers
 
 | 你想做的事 | 去看 |
 |-----------|------|
-| 理解产品要什么 | [`PRD.md`](PRD.md) · [`docs/product/`](docs/product/) |
+| 理解产品要什么 | [`docs/PRD.md`](docs/PRD.md) · [`docs/product/`](docs/product/) |
 | 理解系统怎么搭的 | [`docs/engineering/architecture.md`](docs/engineering/architecture.md) |
 | 理解 Agent/工具/LLM 设计 | [`docs/engineering/agent-design.md`](docs/engineering/agent-design.md) |
 | 动数据库 | [`docs/engineering/data-model.md`](docs/engineering/data-model.md) |

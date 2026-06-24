@@ -49,6 +49,13 @@ function createBot(env: Env): Bot {
   bot.command('last',  ctx => runAgent(ctx.chat.id.toString(), '获取最近一次加油记录', env, ctx));
   bot.command('stats', ctx => runAgent(ctx.chat.id.toString(), '查询本月油耗统计', env, ctx));
 
+  // Dashboard 快捷链接 — token 由服务端自动注入，点击即可查看
+  bot.command('dashboard', ctx => {
+    const url = env.DASHBOARD_URL;
+    if (!url) return ctx.reply('⚠️ 未配置 Dashboard 地址，请联系管理员设置 DASHBOARD_URL。');
+    return ctx.reply('📊 <a href="' + url + '">打开 Moto Agent Dashboard</a>', { parse_mode: 'HTML' });
+  });
+
   bot.on('message:text', ctx =>
     runAgent(ctx.chat.id.toString(), ctx.message.text, env, ctx)
   );
@@ -116,10 +123,15 @@ export default {
       }
 
       // ── Dashboard HTML ────────────────────────────────────────────────────
-      if (url.pathname === '/dashboard') {
-        // Token 复用 ALLOWED_CHAT_ID（白名单），无需单独配置
-        const token = url.searchParams.get('token') || env.ALLOWED_CHAT_ID || '';
+      if (url.pathname === '/dashboard' || url.pathname === '/dashboard/') {
+        // Token 从 ALLOWED_CHAT_ID 自动注入，URL 无需携带
+        const token = env.ALLOWED_CHAT_ID || '';
         return new Response(dashboardPage(token), { status: 200, headers: { 'Content-Type': 'text/html; charset=utf-8' } });
+      }
+
+      // ── Debug ping ─────────────────────────────────────────────────────────
+      if (url.pathname === '/ping') {
+        return new Response('pong ' + (env.ALLOWED_CHAT_ID ? 'ok' : 'no-token'), { status: 200, headers: { 'Content-Type': 'text/plain' } });
       }
 
       // ── Dashboard API (read-only, token auth) ─────────────────────────────

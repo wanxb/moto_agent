@@ -27,7 +27,7 @@ CREATE INDEX IF NOT EXISTS idx_maint_type    ON maintenance_records(type);
 ```
 
 - 迁移：`migrations/0002_maintenance.sql`（`CREATE TABLE IF NOT EXISTS`，纯新增、可重入）。
-- 同步：`schema.sql` 加表；`test/utils.ts` `initDB` 加建表、`clearDB` 加 `DELETE FROM maintenance_records`。
+- 同步：`docs/schema.sql` 加表；`test/utils.ts` `initDB` 加建表、`clearDB` 加 `DELETE FROM maintenance_records`。
 - 排序基准：有 `odometer` 用 odometer DESC，否则 date DESC。简化实现统一按 `date DESC, id DESC`（保养通常按时间看；里程可空，date 必填更稳）。
 
 ## 3. 工具契约变更

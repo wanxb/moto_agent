@@ -1,12 +1,12 @@
 # 数据模型与演进
 
-> D1（SQLite 兼容）。实现见 `schema.sql`、访问层 `src/database.ts`。改 schema **必须**遵守本文件的迁移纪律。
+> D1（SQLite 兼容）。实现见 `docs/schema.sql`、访问层 `src/database.ts`。改 schema **必须**遵守本文件的迁移纪律。
 
 ---
 
 ## 1. 当前 Schema
 
-> 含 spec 001 多车管理（`vehicles` 表 + 记录表 `vehicle_id`）。以 `schema.sql` 为准。
+> 含 spec 001 多车管理（`vehicles` 表 + 记录表 `vehicle_id`）。以 `docs/schema.sql` 为准。
 
 ```sql
 -- 车辆（spec 001）
@@ -81,7 +81,7 @@ CREATE INDEX idx_vehicles_default ON vehicles(is_default);
 
 > `vehicle_id` 可空：存量（pre-001）记录经 [迁移 0001](../../migrations/0001_multi_vehicle.sql) 回填到默认车；无任何车辆时记录保持 `vehicle_id=NULL`，按单车模式工作（[agent-design §2](agent-design.md)）。
 
-> 注：PRD §6.1 曾设计 `price_per_l` 生成列，**实际实现未采用**——单价在工具层 `price_total / liters` 即时计算（见 `tools.ts`）。本文件以实际 `schema.sql` 为准。
+> 注：PRD §6.1 曾设计 `price_per_l` 生成列，**实际实现未采用**——单价在工具层 `price_total / liters` 即时计算（见 `tools.ts`）。本文件以实际 `docs/schema.sql` 为准。
 
 ---
 
@@ -109,7 +109,7 @@ CREATE INDEX idx_vehicles_default ON vehicles(is_default);
 - 实现：`tools.ts` 的 `logFuel`（本次油耗）与 `queryStats`（区间汇总）。
 - **排序基准是 `odometer` 而非 `date`**（见 `database.ts` 的 `ORDER BY odometer`）——里程单调递增，比日期更可靠（同日多次加油、补录历史等场景）。
 
-> 已知局限：不强制"加满"标志，精度依赖用户尽量加满（见 [`../../PRD.md`](../../PRD.md) §11 开放问题）。
+> 已知局限：不强制"加满"标志，精度依赖用户尽量加满（见 [`../PRD.md`](../PRD.md) §11 开放问题）。
 
 ---
 
@@ -131,7 +131,7 @@ CREATE INDEX idx_vehicles_default ON vehicles(is_default);
 
 ## 5. 迁移纪律（硬约束）
 
-> **schema 只增不删。** 这是保护历史数据 + 向上兼容的不变量（[`../../CLAUDE.md`](../../CLAUDE.md) §7、[`../../PRD.md`](../../PRD.md) §9）。
+> **schema 只增不删。** 这是保护历史数据 + 向上兼容的不变量（[`../../CLAUDE.md`](../../CLAUDE.md) §7、[`../PRD.md`](../PRD.md) §9）。
 
 **允许**：
 - 新增表。
@@ -145,7 +145,7 @@ CREATE INDEX idx_vehicles_default ON vehicles(is_default);
 ### 迁移操作清单（每次改 schema）
 
 1. 写迁移 SQL（`ALTER TABLE ... ADD COLUMN ...` 或 `CREATE TABLE`），**幂等**（`IF NOT EXISTS`）。
-2. 更新 `schema.sql`（新库初始化用）。
+2. 更新 `docs/schema.sql`（新库初始化用）。
 3. **同步更新 `test/utils.ts` 的建表语句**（测试库与生产 schema 一致）。
 4. 本地验证：`npm run db:init`（或对迁移 SQL 执行 `wrangler d1 execute --local`）。
 5. 线上执行：`wrangler d1 execute moto-agent-db --remote --file=<迁移>.sql`。

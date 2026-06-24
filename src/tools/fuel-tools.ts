@@ -6,6 +6,7 @@ import { resolveVehicle, ambiguousMsg } from './_helpers';
 import {
   insertFuelRecord, getLastFuelRecord, getRecentFuelRecords, getFuelRecordsByDateRange,
   updateFuelRecord, softDeleteFuelRecord,
+  getVehicleMostUsedFuelType, updateVehicle,
 } from '../database';
 
 // ── log_fuel ──────────────────────────────────────────────────────────────────
@@ -25,7 +26,7 @@ export class LogFuelTool implements Tool {
   readonly required = ['date', 'odometer', 'liters', 'price_total'];
 
   async execute(input: Record<string, unknown>, db: D1Database): Promise<string> {
-    const { date, odometer, liters, price_total, fuel_type, note, vehicle } = input as {
+    let { date, odometer, liters, price_total, fuel_type, note, vehicle } = input as {
       date: string; odometer: number; liters: number; price_total: number;
       fuel_type?: string; note?: string; vehicle?: string;
     };
@@ -37,8 +38,22 @@ export class LogFuelTool implements Tool {
     const vehicleId = r.status === 'resolved' ? r.vehicle.id : undefined;
     const vehicleName = r.status === 'resolved' ? r.vehicle.name : undefined;
 
+    // spec 011: 未提油号时，用车辆默认油号；车辆无默认则 fallback 到 95
+    if (!fuel_type && r.status === 'resolved' && r.vehicle.fuel_type) {
+      fuel_type = r.vehicle.fuel_type;
+    }
+
     const prev = await getLastFuelRecord(db, vehicleId);
     await insertFuelRecord(db, { date, odometer, liters, price_total, fuel_type, note, vehicle_id: vehicleId });
+
+    // spec 011: 自动检测油号变化。最近 5 条中最常出现的油号 ≥3 次且与当前不同 → 静默更新
+    if (r.status === 'resolved') {
+      const mostUsed = await getVehicleMostUsedFuelType(db, r.vehicle.id);
+      if (mostUsed && mostUsed.count >= 3 && r.vehicle.fuel_type !== mostUsed.fuel_type) {
+        await updateVehicle(db, r.vehicle.id, { fuel_type: mostUsed.fuel_type });
+        console.log(`[tool] auto-updated ${r.vehicle.name} fuel_type: ${r.vehicle.fuel_type ?? 'null'} → ${mostUsed.fuel_type}`);
+      }
+    }
 
     const pricePerL = (price_total / liters).toFixed(2);
     let msg = `✅ 已记录${vehicleName ? `（${vehicleName}）` : ''}\n📍 里程：${odometer.toLocaleString('zh')} km\n⛽ 加油：${liters} L × ¥${pricePerL}/L = ¥${price_total}`;

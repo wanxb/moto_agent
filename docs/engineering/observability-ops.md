@@ -44,7 +44,7 @@ npx wrangler tail        # 实时跟踪线上日志
 ```bash
 # 1. 创建并初始化 D1
 wrangler d1 create moto-agent-db          # 把返回的 database_id 填入 wrangler.toml
-npm run db:init:remote                     # 建表（schema.sql）
+npm run db:init:remote                     # 建表（docs/schema.sql）
 
 # 2. 创建 KV namespace
 wrangler kv:namespace create SESSION_KV    # 把返回的 id 填入 wrangler.toml
@@ -74,7 +74,7 @@ npm run deploy                     # 部署（Workers 原子切换，秒级）
 
 ### 3.3 数据库迁移
 
-见 [`data-model.md`](data-model.md) §5。要点：只增不删、`schema.sql` 与 `test/utils.ts` 同步、先本地后 `--remote`。
+见 [`data-model.md`](data-model.md) §5。要点：只增不删、`docs/schema.sql` 与 `test/utils.ts` 同步、先本地后 `--remote`。
 
 ### 3.4 部署后冒烟
 

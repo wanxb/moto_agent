@@ -3,7 +3,7 @@
 --   · CREATE TABLE / CREATE INDEX 带 IF NOT EXISTS，可安全重入。
 --   · ALTER TABLE ADD COLUMN 无 IF NOT EXISTS（SQLite 限制），重复执行会报 "duplicate column"，属正常——表示已迁移过。
 --   · 数据回填（INSERT/UPDATE）带 WHERE 守卫，重入安全。
--- 全新数据库请直接用 schema.sql（已含 vehicle_id），不要再跑本迁移。
+-- 全新数据库请直接用 docs/schema.sql（已含 vehicle_id），不要再跑本迁移。
 -- 执行：本地 wrangler d1 execute moto-agent-db --local  --file=migrations/0001_multi_vehicle.sql
 --       线上 wrangler d1 execute moto-agent-db --remote --file=migrations/0001_multi_vehicle.sql
 

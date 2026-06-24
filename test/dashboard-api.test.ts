@@ -8,7 +8,7 @@ function apiUrl(path: string) { return `http://localhost${path}&token=${TOKEN}`;
 
 beforeAll(async () => {
   // Ensure tables exist (the worker's fetch path would init them, but we'll ensure here)
-  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS vehicles (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, alias TEXT, is_default INTEGER NOT NULL DEFAULT 0, is_active INTEGER NOT NULL DEFAULT 1, user_id INTEGER, created_at TEXT NOT NULL DEFAULT (datetime('now')))`).run();
+  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS vehicles (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, alias TEXT, brand TEXT, model TEXT, fuel_type TEXT, tank_capacity REAL, color TEXT, is_default INTEGER NOT NULL DEFAULT 0, is_active INTEGER NOT NULL DEFAULT 1, user_id INTEGER, created_at TEXT NOT NULL DEFAULT (datetime('now')))`).run();
   await env.DB.prepare(`CREATE TABLE IF NOT EXISTS fuel_records (id INTEGER PRIMARY KEY AUTOINCREMENT, date TEXT NOT NULL, odometer REAL NOT NULL, liters REAL NOT NULL, price_total REAL NOT NULL, fuel_type TEXT NOT NULL DEFAULT '95', note TEXT, vehicle_id INTEGER, deleted_at TEXT, created_at TEXT NOT NULL DEFAULT (datetime('now')))`).run();
   await env.DB.prepare(`CREATE TABLE IF NOT EXISTS reminders (id INTEGER PRIMARY KEY AUTOINCREMENT, vehicle_id INTEGER, type TEXT NOT NULL, mode TEXT NOT NULL, trigger_odometer REAL, trigger_date TEXT, interval_km REAL, note TEXT, chat_id TEXT, status TEXT NOT NULL DEFAULT 'active', fired_at TEXT, created_at TEXT NOT NULL DEFAULT (datetime('now')))`).run();
 });
@@ -50,9 +50,11 @@ describe('/api/v1/stats', () => {
 
     const res = await SELF.fetch(apiUrl('/api/v1/stats?x=3&days=365'));
     expect(res.status).toBe(200);
-    const body = await res.json() as { records: { consumption: number | null }[]; avg: number; totalKm: number };
-    // 10L/500km=2.0, 9L/500km=1.8 → totalKm=1000 → avg = 19/1000*100 = 1.9
-    expect(body.totalKm).toBe(1000);
+    const body = await res.json() as { records: { consumption: number | null }[]; avg: number; totalKm: number; totalCost: number; totalLiters: number };
+    // 10L/500km=2.0, 9L/500km=1.8 → totalLiters=19, totalKm(累计差)=1000 → avg = 19/1000*100 = 1.9
+    // totalKm 返回最新实际里程（odometer=10000），非累计差
+    expect(body.totalKm).toBe(10000);
+    expect(body.totalLiters).toBe(19);
     expect(body.avg).toBeCloseTo(1.9, 1);
     expect(body.records[0].consumption).toBeNull();
     expect(body.records[1].consumption).toBeCloseTo(2.0, 1);

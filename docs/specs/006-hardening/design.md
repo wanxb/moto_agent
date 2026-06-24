@@ -23,7 +23,7 @@
 ```sql
 ALTER TABLE reminders ADD COLUMN interval_km REAL;   -- 里程提醒的续期间隔（NULL=一次性）
 ```
-同步 `schema.sql` / `test/utils.ts` / `types.ts`（`Reminder.interval_km`）。
+同步 `docs/schema.sql` / `test/utils.ts` / `types.ts`（`Reminder.interval_km`）。
 
 ### set_reminder
 里程模式用 `interval_km` 计算目标时，**把 interval_km 一并存入**（绝对目标 `trigger_odometer` 模式不存，保持一次性）。

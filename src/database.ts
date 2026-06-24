@@ -75,9 +75,18 @@ export async function softDeleteFuelRecord(db: D1Database, id: number, deletedAt
 
 // ── Vehicles (spec 001) ───────────────────────────────────────────────────────
 
-export async function insertVehicle(db: D1Database, name: string, isDefault = false): Promise<number> {
-  const res = await db.prepare('INSERT INTO vehicles (name, is_default) VALUES (?, ?)')
-    .bind(name, isDefault ? 1 : 0).run();
+export async function insertVehicle(db: D1Database, name: string, opts?: {
+  isDefault?: boolean; brand?: string; model?: string;
+  fuel_type?: string; tank_capacity?: number; color?: string;
+}): Promise<number> {
+  const res = await db.prepare(
+    `INSERT INTO vehicles (name, is_default, brand, model, fuel_type, tank_capacity, color)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`
+  ).bind(
+    name, opts?.isDefault ? 1 : 0,
+    opts?.brand ?? null, opts?.model ?? null,
+    opts?.fuel_type ?? null, opts?.tank_capacity ?? null, opts?.color ?? null
+  ).run();
   return res.meta.last_row_id as number;
 }
 
@@ -120,6 +129,38 @@ export async function setDefaultVehicle(db: D1Database, id: number): Promise<voi
     db.prepare('UPDATE vehicles SET is_default = 0'),
     db.prepare('UPDATE vehicles SET is_default = 1 WHERE id = ?').bind(id),
   ]);
+}
+
+// 车辆属性白名单（spec 011）。空字符串 → null。
+const VEHICLE_EDITABLE_COLUMNS = ['brand', 'model', 'fuel_type', 'tank_capacity', 'color'];
+
+export async function updateVehicle(
+  db: D1Database, id: number,
+  fields: Partial<Pick<Vehicle, 'brand' | 'model' | 'fuel_type' | 'tank_capacity' | 'color'>>
+): Promise<number> {
+  const entries = Object.entries(fields).filter(
+    ([k]) => VEHICLE_EDITABLE_COLUMNS.includes(k) && fields[k as keyof typeof fields] !== undefined
+  );
+  if (!entries.length) return 0;
+  const setClauses = entries.map(([k]) => `${k} = ?`);
+  const values = entries.map(([, v]) => (v === '' ? null : (v ?? null)));
+  const sql = `UPDATE vehicles SET ${setClauses.join(', ')} WHERE id = ?`;
+  const res = await db.prepare(sql).bind(...values, id).run();
+  return res.meta.changes ?? 0;
+}
+
+/** 查询该车最近 5 条加油记录中出现最多的 fuel_type 及其次数。无记录时返回 null。 */
+export async function getVehicleMostUsedFuelType(
+  db: D1Database, vehicleId: number
+): Promise<{ fuel_type: string; count: number } | null> {
+  const { results } = await db.prepare(
+    `SELECT fuel_type, COUNT(*) AS count FROM (
+       SELECT fuel_type FROM fuel_records
+        WHERE vehicle_id = ? AND deleted_at IS NULL
+        ORDER BY date DESC, id DESC LIMIT 5
+     ) GROUP BY fuel_type ORDER BY count DESC LIMIT 1`
+  ).bind(vehicleId).all<{ fuel_type: string; count: number }>();
+  return results[0] ?? null;
 }
 
 // ── Maintenance records (spec 002) ────────────────────────────────────────────

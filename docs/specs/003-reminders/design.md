@@ -32,7 +32,7 @@ CREATE INDEX IF NOT EXISTS idx_reminders_vehicle ON reminders(vehicle_id);
 ```
 
 - 迁移 `migrations/0003_reminders.sql`（纯新增、可重入）。
-- 同步 `schema.sql` + `test/utils.ts`（`initDB` 建表、`clearDB` 删表）+ `types.ts` `Reminder`。
+- 同步 `docs/schema.sql` + `test/utils.ts`（`initDB` 建表、`clearDB` 删表）+ `types.ts` `Reminder`。
 
 ## 3. wrangler.toml（Cron Triggers）
 

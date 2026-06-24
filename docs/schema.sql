@@ -5,6 +5,11 @@ CREATE TABLE IF NOT EXISTS vehicles (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
     name        TEXT    NOT NULL,
     alias       TEXT,                            -- 简称/别名（spec 009，可空）
+    brand       TEXT,                            -- 品牌（spec 011）
+    model       TEXT,                            -- 型号（spec 011）
+    fuel_type   TEXT,                            -- 默认油号（spec 011）
+    tank_capacity REAL,                          -- 油箱容量 L（spec 011）
+    color       TEXT,                            -- 颜色（spec 011）
     is_default  INTEGER NOT NULL DEFAULT 0,       -- 1=默认车（同一时刻仅一辆为 1）
     is_active   INTEGER NOT NULL DEFAULT 1,       -- 软删除预留
     user_id     INTEGER,                          -- Phase 3 多用户预留

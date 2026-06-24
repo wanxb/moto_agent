@@ -1,9 +1,9 @@
-// Dashboard REST API（ADR-0009） — 只读，token 鉴权。
+// Dashboard REST API（ADR-0009） — 只读，token 鉴权，分页支持。
 // 数据来源：现有 database.ts 函数，加少量直查 SQL。
 
-import { getRecentFuelRecords, getFuelRecordsByDateRange } from '../database';
+import { getFuelRecordsByDateRange, getMaintenanceRecords } from '../database';
 import { getActiveReminders } from '../database';
-import type { FuelRecord } from '../types';
+import type { FuelRecord, MaintenanceRecord } from '../types';
 
 // ── Token 鉴权 ───────────────────────────────────────────────────────────────
 
@@ -11,7 +11,7 @@ const CORS_HEADERS = { 'Access-Control-Allow-Origin': '*', 'Content-Type': 'appl
 
 function tokenAuth(request: Request, env: { ALLOWED_CHAT_ID?: string }): Response | null {
   const expected = env.ALLOWED_CHAT_ID;
-  if (!expected) return null;  // 未设 ALLOWED_CHAT_ID → Dashboard 开放（单用户阶段安全等效）
+  if (!expected) return null;
   const url = new URL(request.url);
   const token = url.searchParams.get('token') ?? request.headers.get('Authorization')?.replace(/^Bearer\s+/i, '');
   if (token !== expected) return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: CORS_HEADERS });
@@ -21,7 +21,6 @@ function tokenAuth(request: Request, env: { ALLOWED_CHAT_ID?: string }): Respons
 // ── 入口 ──────────────────────────────────────────────────────────────────────
 
 export async function handleApiRequest(request: Request, env: { DB: D1Database; ALLOWED_CHAT_ID?: string }): Promise<Response> {
-  // CORS preflight（浏览器跨域 fetch 先发 OPTIONS）
   if (request.method === 'OPTIONS') {
     return new Response(null, { status: 204, headers: { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET, OPTIONS', 'Access-Control-Allow-Headers': 'Authorization, Content-Type' } });
   }
@@ -33,11 +32,28 @@ export async function handleApiRequest(request: Request, env: { DB: D1Database; 
   const json = (data: unknown) => new Response(JSON.stringify(data), { status: 200, headers: CORS_HEADERS });
 
   switch (url.pathname) {
-    case '/api/v1/stats':     return json(await fuelStats(env.DB, url));
-    case '/api/v1/vehicles':  return json(await vehicleList(env.DB));
-    case '/api/v1/reminders': return json(await reminderList(env.DB));
-    default:                  return new Response(JSON.stringify({ error: 'Not Found' }), { status: 404, headers: CORS_HEADERS });
+    case '/api/v1/stats':        return json(await fuelStats(env.DB, url));
+    case '/api/v1/vehicles':     return json(await vehicleList(env.DB));
+    case '/api/v1/reminders':    return json(await reminderList(env.DB, url));
+    case '/api/v1/fuel-records': return json(await fuelRecordList(env.DB, url));
+    case '/api/v1/maintenance':  return json(await maintenanceList(env.DB, url));
+    default:                     return new Response(JSON.stringify({ error: 'Not Found' }), { status: 404, headers: CORS_HEADERS });
   }
+}
+
+// ── 分页参数解析 ──────────────────────────────────────────────────────────────
+
+function parsePagination(url: URL): { page: number; limit: number } {
+  const page = Math.max(1, Number(url.searchParams.get('page') ?? 1));
+  const limit = Math.min(50, Math.max(1, Number(url.searchParams.get('limit') ?? 20)));
+  return { page, limit };
+}
+
+function paginate<T>(items: T[], page: number, limit: number): { items: T[]; total: number; page: number; totalPages: number } {
+  const total = items.length;
+  const totalPages = Math.ceil(total / limit);
+  const offset = (page - 1) * limit;
+  return { items: items.slice(offset, offset + limit), total, page, totalPages };
 }
 
 // ── /api/v1/stats?days=90&vehicle=小拉 ───────────────────────────────────────
@@ -47,16 +63,15 @@ interface StatsPoint {
   odometer: number;
   liters: number;
   cost: number;
-  consumption: number | null;   // L/100km, null for first record
+  consumption: number | null;
   distance: number | null;
 }
 
 async function fuelStats(db: D1Database, url: URL): Promise<{ records: StatsPoint[]; avg: number; totalKm: number; totalCost: number; totalLiters: number }> {
-  const days = Math.max(1, Number(url.searchParams.get('days') ?? 90));
+  const days = Math.max(1, Number(url.searchParams.get('days') ?? 30));
   const vehicle = url.searchParams.get('vehicle') || undefined;
   const since = new Date(Date.now() - days * 86400000).toISOString().slice(0, 10);
 
-  // 取指定车（或全部）的日期范围记录
   const records = vehicle
     ? await getFuelRecordsByVehicleName(db, since, vehicle)
     : (await getFuelRecordsByDateRange(db, since, '2099-12-31')).sort((a, b) => a.odometer - b.odometer);
@@ -74,10 +89,11 @@ async function fuelStats(db: D1Database, url: URL): Promise<{ records: StatsPoin
   }
 
   const avg = totalKm > 0 ? Number((totalLiters / totalKm * 100).toFixed(2)) : 0;
-  return { records: points, avg, totalKm, totalCost, totalLiters };
+  // 总里程 = 最新实际里程（最后一条记录的 odometer），而非累计差
+  const latestOdometer = records.length > 0 ? records[records.length - 1].odometer : 0;
+  return { records: points, avg, totalKm: latestOdometer, totalCost, totalLiters };
 }
 
-// 按车辆名（而非 id）取日期范围记录，Dashboard 用
 async function getFuelRecordsByVehicleName(db: D1Database, since: string, vehicle: string): Promise<FuelRecord[]> {
   const { results } = await db.prepare(
     `SELECT f.* FROM fuel_records f
@@ -88,18 +104,34 @@ async function getFuelRecordsByVehicleName(db: D1Database, since: string, vehicl
   return results;
 }
 
+// 同上但按日期倒序，fuel-records 列表用
+async function getFuelRecordsByVehicleNameDesc(db: D1Database, since: string, vehicle: string): Promise<FuelRecord[]> {
+  const { results } = await db.prepare(
+    `SELECT f.* FROM fuel_records f
+       JOIN vehicles v ON f.vehicle_id = v.id
+      WHERE f.date >= ? AND f.deleted_at IS NULL AND (v.name = ? OR v.alias = ?)
+      ORDER BY f.date DESC, f.odometer DESC`
+  ).bind(since, vehicle, vehicle).all<FuelRecord>();
+  return results;
+}
+
 // ── /api/v1/vehicles ─────────────────────────────────────────────────────────
 
 interface VehicleInfo {
   name: string;
   alias: string | null;
+  brand: string | null;
+  model: string | null;
+  fuel_type: string | null;
+  tank_capacity: number | null;
+  color: string | null;
   latestOdometer: number | null;
   lastFuelDate: string | null;
 }
 
 async function vehicleList(db: D1Database): Promise<{ vehicles: VehicleInfo[] }> {
   const { results } = await db.prepare(
-    `SELECT v.name, v.alias,
+    `SELECT v.name, v.alias, v.brand, v.model, v.fuel_type, v.tank_capacity, v.color,
             (SELECT odometer FROM fuel_records WHERE vehicle_id = v.id AND deleted_at IS NULL ORDER BY odometer DESC LIMIT 1) AS latestOdometer,
             (SELECT date     FROM fuel_records WHERE vehicle_id = v.id AND deleted_at IS NULL ORDER BY odometer DESC LIMIT 1) AS lastFuelDate
        FROM vehicles v WHERE v.is_active = 1 ORDER BY v.id ASC`
@@ -107,23 +139,110 @@ async function vehicleList(db: D1Database): Promise<{ vehicles: VehicleInfo[] }>
   return { vehicles: results };
 }
 
-// ── /api/v1/reminders ────────────────────────────────────────────────────────
+// ── /api/v1/reminders?vehicle=小拉&page=1&limit=20 ───────────────────────────
 
 interface ReminderInfo {
   type: string;
   mode: 'mileage' | 'date';
-  trigger: string;          // "13,000 km" or "2027-01-05"
+  trigger: string;
   vehicle: string | null;
 }
 
-async function reminderList(db: D1Database): Promise<{ reminders: ReminderInfo[] }> {
+async function reminderList(db: D1Database, url: URL): Promise<{ reminders: ReminderInfo[]; total: number; page: number; totalPages: number }> {
+  const vehicle = url.searchParams.get('vehicle') || undefined;
+  const { page, limit } = parsePagination(url);
   const reminders = await getActiveReminders(db);
-  return {
-    reminders: reminders.map(r => ({
-      type: r.type,
-      mode: r.mode as 'mileage' | 'date',
-      trigger: r.mode === 'mileage' ? `${(r.trigger_odometer ?? 0).toLocaleString('zh')} km` : (r.trigger_date ?? ''),
-      vehicle: r.vehicle_name,
-    })),
-  };
+  const filtered = vehicle
+    ? reminders.filter(r => r.vehicle_name === vehicle)
+    : reminders;
+
+  const mapped = filtered.map(r => ({
+    type: r.type,
+    mode: r.mode as 'mileage' | 'date',
+    trigger: r.mode === 'mileage' ? `${(r.trigger_odometer ?? 0).toLocaleString('zh')} km` : (r.trigger_date ?? ''),
+    vehicle: r.vehicle_name,
+  }));
+
+  const p = paginate(mapped, page, limit);
+  return { reminders: p.items, total: p.total, page: p.page, totalPages: p.totalPages };
+}
+
+// ── /api/v1/fuel-records?vehicle=小拉&days=90&page=1&limit=20 ───────────────
+
+interface FuelRecordItem {
+  date: string;
+  odometer: number;
+  liters: number;
+  cost: number;
+  fuel_type: string;
+  consumption: number | null;
+  distance: number | null;
+}
+
+async function fuelRecordList(db: D1Database, url: URL): Promise<{ records: FuelRecordItem[]; total: number; page: number; totalPages: number }> {
+  const days = Math.max(1, Number(url.searchParams.get('days') ?? 30));
+  const vehicle = url.searchParams.get('vehicle') || undefined;
+  const { page, limit } = parsePagination(url);
+  const since = new Date(Date.now() - days * 86400000).toISOString().slice(0, 10);
+
+  // 直接按日期倒序取记录（列表不需要 fill-to-fill 油耗计算）
+  const records = vehicle
+    ? await getFuelRecordsByVehicleNameDesc(db, since, vehicle)
+    : (await getFuelRecordsByDateRange(db, since, '2099-12-31')).sort((a, b) => b.date.localeCompare(a.date) || b.odometer - a.odometer);
+
+  const items: FuelRecordItem[] = records.map(r => ({
+    date: r.date,
+    odometer: r.odometer,
+    liters: r.liters,
+    cost: r.price_total,
+    fuel_type: r.fuel_type,
+    consumption: null,
+    distance: null,
+  }));
+
+  const p = paginate(items, page, limit);
+  return { records: p.items, total: p.total, page: p.page, totalPages: p.totalPages };
+}
+
+// ── /api/v1/maintenance?vehicle=小拉&page=1&limit=10 ─────────────────────────
+
+interface MaintenanceRecordItem {
+  date: string;
+  type: string;
+  odometer: number | null;
+  cost: number | null;
+  note: string | null;
+}
+
+async function maintenanceList(db: D1Database, url: URL): Promise<{ records: MaintenanceRecordItem[]; total: number; page: number; totalPages: number }> {
+  const vehicle = url.searchParams.get('vehicle') || undefined;
+  const { page, limit } = parsePagination(url);
+
+  let records: MaintenanceRecord[];
+  if (vehicle) {
+    records = await getMaintenanceRecordsByVehicleName(db, vehicle);
+  } else {
+    records = await getMaintenanceRecords(db, {});
+  }
+
+  const mapped = records.map(r => ({
+    date: r.date,
+    type: r.type,
+    odometer: r.odometer,
+    cost: r.cost,
+    note: r.note,
+  }));
+
+  const p = paginate(mapped, page, limit);
+  return { records: p.items, total: p.total, page: p.page, totalPages: p.totalPages };
+}
+
+async function getMaintenanceRecordsByVehicleName(db: D1Database, vehicle: string): Promise<MaintenanceRecord[]> {
+  const { results } = await db.prepare(
+    `SELECT m.* FROM maintenance_records m
+       JOIN vehicles v ON m.vehicle_id = v.id
+      WHERE v.is_active = 1 AND (v.name = ? OR v.alias = ?)
+      ORDER BY m.date DESC, m.id DESC`
+  ).bind(vehicle, vehicle).all<MaintenanceRecord>();
+  return results;
 }

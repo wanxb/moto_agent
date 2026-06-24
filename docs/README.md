@@ -11,9 +11,11 @@
 ```
 moto_agent/
 ├── CLAUDE.md / AGENTS.md       Agent 操作手册（AI 编码助手入口）
-├── PRD.md                      产品需求文档（master，MVP 定义）
 └── docs/
     ├── README.md               ← 你在这里
+    ├── PRD.md                  产品需求文档（master，MVP 定义）
+    ├── schema.sql              D1 建表脚本
+    ├── moto_logo.png           应用图标
     ├── product/                产品层：为什么做、给谁做、做到什么程度
     │   ├── personas.md         用户画像 · 场景 · Jobs-to-be-Done
     │   ├── roadmap.md          分阶段路线图与优先级理由
@@ -45,9 +47,9 @@ moto_agent/
 | 角色 | 推荐路径 |
 |------|---------|
 | **AI 编码助手** | [`../CLAUDE.md`](../CLAUDE.md) → 对应 [`specs/`](specs/) → [`engineering/agent-design.md`](engineering/agent-design.md) |
-| **新加入的开发者** | [`../PRD.md`](../PRD.md) → [`engineering/architecture.md`](engineering/architecture.md) → [`process/contributing.md`](process/contributing.md) → [`process/coding-standards.md`](process/coding-standards.md) |
+| **新加入的开发者** | [`PRD.md`](PRD.md) → [`engineering/architecture.md`](engineering/architecture.md) → [`process/contributing.md`](process/contributing.md) → [`process/coding-standards.md`](process/coding-standards.md) |
 | **要开发某个功能** | [`specs/README.md`](specs/README.md) → 该功能的 `requirements/design/tasks` |
-| **产品/需求视角** | [`../PRD.md`](../PRD.md) → [`product/personas.md`](product/personas.md) → [`product/roadmap.md`](product/roadmap.md) → [`product/metrics.md`](product/metrics.md) |
+| **产品/需求视角** | [`PRD.md`](PRD.md) → [`product/personas.md`](product/personas.md) → [`product/roadmap.md`](product/roadmap.md) → [`product/metrics.md`](product/metrics.md) |
 | **想了解某个技术决策** | [`engineering/adr/`](engineering/adr/) |
 
 ---

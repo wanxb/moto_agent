@@ -8,6 +8,7 @@ export interface Env {
   DEEPSEEK_API_KEY: string;
   ANTHROPIC_API_KEY: string;
   ALLOWED_CHAT_ID: string;
+  DASHBOARD_URL?: string;   // Dashboard 链接，bot /dashboard 命令使用
 }
 
 // OpenAI-compatible message format (used internally and for DeepSeek)
@@ -62,6 +63,11 @@ export interface Vehicle {
   id: number;
   name: string;
   alias: string | null;  // 简称/别名（spec 009）
+  brand: string | null;           // 品牌（spec 011）
+  model: string | null;           // 型号（spec 011）
+  fuel_type: string | null;       // 默认油号（spec 011）
+  tank_capacity: number | null;   // 油箱容量 L（spec 011）
+  color: string | null;           // 颜色（spec 011）
   is_default: number;   // 0 | 1
   is_active: number;    // 0 | 1
   user_id: number | null;

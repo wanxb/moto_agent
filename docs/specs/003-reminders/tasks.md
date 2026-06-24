@@ -7,7 +7,7 @@
 
 ## 阶段 A — 数据模型
 
-- [x] **T1 迁移 + schema + utils + types**：`migrations/0003_reminders.sql`（可重入）；`schema.sql`、`test/utils.ts`、`types.ts`（`Reminder`/`ReminderWithVehicle`）同步。
+- [x] **T1 迁移 + schema + utils + types**：`migrations/0003_reminders.sql`（可重入）；`docs/schema.sql`、`test/utils.ts`、`types.ts`（`Reminder`/`ReminderWithVehicle`）同步。
   - ✅ 本地执行 + 二次执行验证可重入（6 张表就位）；既有 82 测试零回归。
 
 ## 阶段 B — 数据访问层（database.ts）

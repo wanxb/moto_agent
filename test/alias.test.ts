@@ -14,7 +14,7 @@ beforeEach(async () => { await clearDB(env.DB); });
 
 describe('vehicle alias database layer', () => {
   it('getVehicleByNameOrAlias matches by name or alias', async () => {
-    const id = await insertVehicle(env.DB, 'Honda NS125LA', true);
+    const id = await insertVehicle(env.DB, 'Honda NS125LA', { isDefault: true });
     await setVehicleAlias(env.DB, id, '小拉');
 
     expect((await getVehicleByNameOrAlias(env.DB, 'Honda NS125LA'))!.id).toBe(id);
@@ -23,7 +23,7 @@ describe('vehicle alias database layer', () => {
   });
 
   it('getVehicleByName still works (exact name only)', async () => {
-    const id = await insertVehicle(env.DB, 'Honda NS125LA', true);
+    const id = await insertVehicle(env.DB, 'Honda NS125LA', { isDefault: true });
     await setVehicleAlias(env.DB, id, '小拉');
 
     expect((await getVehicleByName(env.DB, 'Honda NS125LA'))!.id).toBe(id);
@@ -42,7 +42,7 @@ describe('set_vehicle_alias (tools)', () => {
   });
 
   it('removes alias when empty string passed', async () => {
-    const id = await insertVehicle(env.DB, 'Honda NS125LA', true);
+    const id = await insertVehicle(env.DB, 'Honda NS125LA', { isDefault: true });
     await setVehicleAlias(env.DB, id, '小拉');
     await dispatchTool('set_vehicle_alias', { name: 'Honda NS125LA', alias: '' }, env.DB);
     expect((await getVehicleByName(env.DB, 'Honda NS125LA'))!.alias).toBeNull();
@@ -58,7 +58,7 @@ describe('set_vehicle_alias (tools)', () => {
   });
 
   it('can locate vehicle by its existing alias', async () => {
-    const id = await insertVehicle(env.DB, 'Honda NS125LA', true);
+    const id = await insertVehicle(env.DB, 'Honda NS125LA', { isDefault: true });
     await setVehicleAlias(env.DB, id, '小拉');
     // 通过别名找到车并改别名
     await dispatchTool('set_vehicle_alias', { name: '小拉', alias: '新小拉' }, env.DB);
@@ -70,7 +70,7 @@ describe('set_vehicle_alias (tools)', () => {
 
 describe('alias resolution in tools', () => {
   it('AC2 — log_fuel resolves by alias', async () => {
-    const id = await insertVehicle(env.DB, 'Honda NS125LA', true);
+    const id = await insertVehicle(env.DB, 'Honda NS125LA', { isDefault: true });
     await setVehicleAlias(env.DB, id, '小拉');
 
     const result = await dispatchTool('log_fuel', {
@@ -81,7 +81,7 @@ describe('alias resolution in tools', () => {
   });
 
   it('AC3 — full name still works alongside alias', async () => {
-    const id = await insertVehicle(env.DB, 'Honda NS125LA', true);
+    const id = await insertVehicle(env.DB, 'Honda NS125LA', { isDefault: true });
     await setVehicleAlias(env.DB, id, '小拉');
 
     const byAlias = await dispatchTool('get_last_record', { vehicle: '小拉' }, env.DB);
@@ -103,7 +103,7 @@ describe('alias resolution in tools', () => {
   });
 
   it('AC6 — rename does not affect alias', async () => {
-    const id = await insertVehicle(env.DB, 'Honda NS125LA', true);
+    const id = await insertVehicle(env.DB, 'Honda NS125LA', { isDefault: true });
     await setVehicleAlias(env.DB, id, '小拉');
 
     await dispatchTool('rename_vehicle', { name: 'Honda NS125LA', new_name: '大本田' }, env.DB);
@@ -112,8 +112,8 @@ describe('alias resolution in tools', () => {
   });
 
   it('AC7 — set_default_vehicle by alias', async () => {
-    const id = await insertVehicle(env.DB, 'Honda NS125LA', true);
-    await insertVehicle(env.DB, '通勤车', false);
+    const id = await insertVehicle(env.DB, 'Honda NS125LA', { isDefault: true });
+    await insertVehicle(env.DB, '通勤车', { isDefault: false });
     await setVehicleAlias(env.DB, id, '小拉');
 
     // 先切走默认，再通过别名切回来
@@ -123,7 +123,7 @@ describe('alias resolution in tools', () => {
   });
 
   it('rename can find vehicle by alias too', async () => {
-    const id = await insertVehicle(env.DB, 'Honda NS125LA', true);
+    const id = await insertVehicle(env.DB, 'Honda NS125LA', { isDefault: true });
     await setVehicleAlias(env.DB, id, '小拉');
 
     const result = await dispatchTool('rename_vehicle', { name: '小拉', new_name: '大拉' }, env.DB);

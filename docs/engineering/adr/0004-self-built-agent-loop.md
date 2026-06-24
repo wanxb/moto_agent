@@ -32,4 +32,4 @@
 
 ## 关联
 
-[`../agent-design.md`](../agent-design.md) · [`../../../PRD.md`](../../../PRD.md) §5.3。
+[`../agent-design.md`](../agent-design.md) · [`../../PRD.md`](../../PRD.md) §5.3。

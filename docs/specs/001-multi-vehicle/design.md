@@ -32,7 +32,7 @@ CREATE INDEX IF NOT EXISTS idx_mileage_vehicle ON mileage_records(vehicle_id);
 
 > SQLite 的 `ALTER TABLE ADD COLUMN` 不支持给已存在行设非默认回填值，故 `vehicle_id` 不带 NOT NULL；存量回填在**迁移脚本**里用 `UPDATE` 完成（§7）。
 
-**同步更新**：`schema.sql`（新库初始化要含 vehicles + vehicle_id 列）、`test/utils.ts`（测试建表语句加 vehicles + vehicle_id）。
+**同步更新**：`docs/schema.sql`（新库初始化要含 vehicles + vehicle_id 列）、`test/utils.ts`（测试建表语句加 vehicles + vehicle_id）。
 
 ### 默认车不变量
 

@@ -15,7 +15,7 @@ CREATE INDEX IF NOT EXISTS idx_fuel_deleted ON fuel_records(deleted_at);
 ```
 
 - 迁移 `migrations/0004_soft_delete.sql`（`ALTER ADD COLUMN` 非幂等，前向一次性；与 [0001](../../migrations/0001_multi_vehicle.sql) 同模式）。
-- 同步 `schema.sql`（fuel_records 加列）+ `test/utils.ts`（建表加列）+ `types.ts`（`FuelRecord.deleted_at`）。
+- 同步 `docs/schema.sql`（fuel_records 加列）+ `test/utils.ts`（建表加列）+ `types.ts`（`FuelRecord.deleted_at`）。
 - **只对 `fuel_records` 加软删**（油耗与提醒核心）；mileage/maintenance 本期不删。
 
 ## 3. 读路径过滤（关键正确性）

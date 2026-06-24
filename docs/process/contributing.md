@@ -87,5 +87,5 @@ test/       测试（与 src 对应）
 scripts/    一次性/辅助脚本（如 seed-fuel）
 migrations/ 数据库迁移（Phase 2 起，顺序命名 NNNN_*.sql）
 docs/       文档（本目录）
-schema.sql  新库初始化建表
+docs/schema.sql  新库初始化建表
 ```

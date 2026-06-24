@@ -28,4 +28,4 @@
 
 ## 关联
 
-[ADR-0002](0002-cloudflare-workers-runtime.md) · [`../../../PRD.md`](../../../PRD.md) §5.1 语言变更说明。
+[ADR-0002](0002-cloudflare-workers-runtime.md) · [`../../PRD.md`](../../PRD.md) §5.1 语言变更说明。

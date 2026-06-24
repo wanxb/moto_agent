@@ -7,7 +7,7 @@
 - **项目**：摩托车油耗管理 Telegram Bot（Cloudflare Workers + D1 + KV，自实现 Agent Loop，DeepSeek 主 / Claude 备）。
 - **入口手册**：[`CLAUDE.md`](CLAUDE.md)
 - **人类文档索引**：[`docs/README.md`](docs/README.md)
-- **产品需求**：[`PRD.md`](PRD.md)
+- **产品需求**：[`PRD.md`](docs/PRD.md)
 
 ## 五条必读铁律（详见 CLAUDE.md §2）
 

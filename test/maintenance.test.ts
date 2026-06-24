@@ -24,8 +24,8 @@ describe('maintenance database layer', () => {
   });
 
   it('filters by vehicle and by type', async () => {
-    const green = await insertVehicle(env.DB, '小绿', true);
-    const commute = await insertVehicle(env.DB, '通勤车', false);
+    const green = await insertVehicle(env.DB, '小绿', { isDefault: true });
+    const commute = await insertVehicle(env.DB, '通勤车', { isDefault: false });
     await insertMaintenanceRecord(env.DB, { date: '2026-06-01', type: '机油', vehicle_id: green });
     await insertMaintenanceRecord(env.DB, { date: '2026-06-02', type: '轮胎', vehicle_id: green });
     await insertMaintenanceRecord(env.DB, { date: '2026-06-03', type: '机油', vehicle_id: commute });
@@ -80,8 +80,8 @@ describe('log_maintenance (tools)', () => {
   });
 
   it('AC6 — ambiguous when multiple vehicles and no default', async () => {
-    await insertVehicle(env.DB, '小绿', false);
-    await insertVehicle(env.DB, '通勤车', false);
+    await insertVehicle(env.DB, '小绿', { isDefault: false });
+    await insertVehicle(env.DB, '通勤车', { isDefault: false });
     const result = await dispatchTool('log_maintenance', {
       date: '2026-06-24', type: '机油', odometer: 13000,
     }, env.DB);
@@ -101,7 +101,7 @@ describe('log_maintenance (tools)', () => {
 
 describe('query_maintenance (tools)', () => {
   it('AC4 — lists history for a vehicle', async () => {
-    const green = await insertVehicle(env.DB, '小绿', true);
+    const green = await insertVehicle(env.DB, '小绿', { isDefault: true });
     await insertMaintenanceRecord(env.DB, { date: '2026-01-05', type: '保险', cost: 1200, vehicle_id: green });
     await insertMaintenanceRecord(env.DB, { date: '2026-04-10', type: '轮胎', odometer: 11200, cost: 420, vehicle_id: green });
     await insertMaintenanceRecord(env.DB, { date: '2026-06-24', type: '机油', odometer: 13000, cost: 80, vehicle_id: green });
@@ -116,7 +116,7 @@ describe('query_maintenance (tools)', () => {
   });
 
   it('AC5 — last_only returns latest of a type', async () => {
-    const green = await insertVehicle(env.DB, '小绿', true);
+    const green = await insertVehicle(env.DB, '小绿', { isDefault: true });
     await insertMaintenanceRecord(env.DB, { date: '2026-03-01', type: '机油', odometer: 9000, cost: 70, vehicle_id: green });
     await insertMaintenanceRecord(env.DB, { date: '2026-06-24', type: '机油', odometer: 13000, cost: 80, vehicle_id: green });
 

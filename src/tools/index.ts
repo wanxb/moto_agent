@@ -7,7 +7,7 @@ import { ToolRegistry } from './interface';
 // Fuel
 import { LogFuelTool, QueryStatsTool, GetLastRecordTool, UpdateLastFuelTool, DeleteLastFuelTool } from './fuel-tools';
 // Vehicle
-import { AddVehicleTool, ListVehiclesTool, SetDefaultVehicleTool, RenameVehicleTool, SetVehicleAliasTool } from './vehicle-tools';
+import { AddVehicleTool, ListVehiclesTool, SetDefaultVehicleTool, RenameVehicleTool, SetVehicleAliasTool, UpdateVehicleTool } from './vehicle-tools';
 // Mileage
 import { LogMileageTool } from './mileage-tools';
 // Maintenance
@@ -27,6 +27,7 @@ export const registry = new ToolRegistry()
   .register(new SetDefaultVehicleTool())
   .register(new RenameVehicleTool())
   .register(new SetVehicleAliasTool())
+  .register(new UpdateVehicleTool())
   .register(new LogMaintenanceTool())
   .register(new QueryMaintenanceTool())
   .register(new SetReminderTool())

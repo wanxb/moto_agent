@@ -7,7 +7,7 @@
 
 > 顺序：数据模型 → 数据访问 → 工具 → prompt → 测试 → 文档。每条勾选前确认其验证项通过。
 
-- [ ] **T1 数据模型**：<迁移 SQL + schema.sql + test/utils.ts 同步>
+- [ ] **T1 数据模型**：<迁移 SQL + docs/schema.sql + test/utils.ts 同步>
   - 验证：`npm run db:init` 成功；测试库可建表。
 - [ ] **T2 数据访问**：<database.ts 新增 SQL 函数>
   - 验证：`database.test.ts` 覆盖。

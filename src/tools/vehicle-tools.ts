@@ -1,9 +1,9 @@
-// 车辆管理工具（spec 001/005/009）。
+// 车辆管理工具（spec 001/005/009/011）。
 
 import type { Tool } from './interface';
 import {
   insertVehicle, getVehicleByName, getVehicleByNameOrAlias, listVehicles,
-  setDefaultVehicle, renameVehicle, setVehicleAlias,
+  setDefaultVehicle, renameVehicle, setVehicleAlias, updateVehicle,
 } from '../database';
 
 // ── add_vehicle ───────────────────────────────────────────────────────────────
@@ -11,16 +11,26 @@ import {
 export class AddVehicleTool implements Tool {
   readonly name = 'add_vehicle';
   readonly description = '添加一辆车。用户说"添加车""新增一辆车 xxx"时调用。';
-  readonly parameters = { name: { type: 'string', description: '车辆名称，如"小绿"' } } as const;
+  readonly parameters = {
+    name:          { type: 'string', description: '车辆名称，如"小绿"' },
+    brand:         { type: 'string', description: '品牌，如本田、雅马哈' },
+    model:         { type: 'string', description: '型号，如 CBF190、巧格' },
+    fuel_type:     { type: 'string', enum: ['92', '95', '98'], description: '默认油号' },
+    tank_capacity: { type: 'number', description: '油箱容量（升）' },
+    color:         { type: 'string', description: '颜色' },
+  } as const;
   readonly required = ['name'];
 
   async execute(input: Record<string, unknown>, db: D1Database): Promise<string> {
-    const { name } = input as { name: string };
+    const { name, brand, model, fuel_type, tank_capacity, color } = input as {
+      name: string; brand?: string; model?: string;
+      fuel_type?: string; tank_capacity?: number; color?: string;
+    };
     const existing = await getVehicleByName(db, name);
     if (existing) return `车辆「${name}」已存在。`;
     // 首辆车自动设为默认
     const isFirst = (await listVehicles(db)).length === 0;
-    await insertVehicle(db, name, isFirst);
+    await insertVehicle(db, name, { isDefault: isFirst, brand, model, fuel_type, tank_capacity, color });
     return isFirst
       ? `✅ 已添加车辆「${name}」，已设为默认车。`
       : `✅ 已添加车辆「${name}」。`;
@@ -109,5 +119,49 @@ export class SetVehicleAliasTool implements Tool {
     if (clash && clash.id !== v.id) return `已存在车辆或简称「${alias}」，换个简称吧。`;
     await setVehicleAlias(db, v.id, alias.trim());
     return `✅ 已将「${v.name}」的简称设为「${alias.trim()}」。`;
+  }
+}
+
+// ── update_vehicle (spec 011) ─────────────────────────────────────────────────
+
+export class UpdateVehicleTool implements Tool {
+  readonly name = 'update_vehicle';
+  readonly description = '修改车辆属性（品牌、型号、油号、油箱容量、颜色）。用户说"把XX的YY改成ZZ""删掉XX的YY"时调用。至少传一个属性字段。';
+  readonly parameters = {
+    name:          { type: 'string', description: '车辆名称或别名（用于定位）' },
+    brand:         { type: 'string', description: '品牌' },
+    model:         { type: 'string', description: '型号' },
+    fuel_type:     { type: 'string', enum: ['92', '95', '98'], description: '默认油号' },
+    tank_capacity: { type: 'number', description: '油箱容量（升）' },
+    color:         { type: 'string', description: '颜色' },
+  } as const;
+  readonly required = ['name'];
+
+  async execute(input: Record<string, unknown>, db: D1Database): Promise<string> {
+    const { name, brand, model, fuel_type, tank_capacity, color } = input as {
+      name: string; brand?: string; model?: string;
+      fuel_type?: string; tank_capacity?: number; color?: string;
+    };
+    const v = await getVehicleByNameOrAlias(db, name);
+    if (!v) return `没有找到车辆「${name}」。`;
+
+    const fields: Record<string, unknown> = {};
+    if (brand !== undefined) fields.brand = brand;
+    if (model !== undefined) fields.model = model;
+    if (fuel_type !== undefined) fields.fuel_type = fuel_type;
+    if (tank_capacity !== undefined) fields.tank_capacity = tank_capacity;
+    if (color !== undefined) fields.color = color;
+
+    if (Object.keys(fields).length === 0) {
+      return '请至少指定一个要修改的属性（品牌/型号/油号/油箱容量/颜色）。';
+    }
+
+    await updateVehicle(db, v.id, fields);
+
+    const changed = Object.entries(fields).map(([k, val]) => {
+      const labels: Record<string, string> = { brand: '品牌', model: '型号', fuel_type: '油号', tank_capacity: '油箱容量', color: '颜色' };
+      return `${labels[k] ?? k} → ${val === '' ? '已清空' : val}`;
+    }).join('，');
+    return `✅ 「${v.name}」已更新：${changed}`;
   }
 }

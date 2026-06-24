@@ -14,7 +14,7 @@ beforeEach(async () => { await clearDB(env.DB); });
 
 describe('vehicles CRUD (database)', () => {
   it('insertVehicle returns id and getVehicleByName finds it', async () => {
-    const id = await insertVehicle(env.DB, '小绿', true);
+    const id = await insertVehicle(env.DB, '小绿', { isDefault: true });
     expect(id).toBeGreaterThan(0);
     const v = await getVehicleByName(env.DB, '小绿');
     expect(v!.id).toBe(id);
@@ -26,16 +26,16 @@ describe('vehicles CRUD (database)', () => {
   });
 
   it('listVehicles and countVehicles reflect active vehicles', async () => {
-    await insertVehicle(env.DB, '小绿', true);
-    await insertVehicle(env.DB, '通勤车', false);
+    await insertVehicle(env.DB, '小绿', { isDefault: true });
+    await insertVehicle(env.DB, '通勤车', { isDefault: false });
     expect(await countVehicles(env.DB)).toBe(2);
     const list = await listVehicles(env.DB);
     expect(list.map(v => v.name)).toEqual(['小绿', '通勤车']);
   });
 
   it('setDefaultVehicle keeps exactly one default (atomic)', async () => {
-    await insertVehicle(env.DB, '小绿', true);
-    const b = await insertVehicle(env.DB, '通勤车', false);
+    await insertVehicle(env.DB, '小绿', { isDefault: true });
+    const b = await insertVehicle(env.DB, '通勤车', { isDefault: false });
     await setDefaultVehicle(env.DB, b);
 
     const def = await getDefaultVehicle(env.DB);
@@ -51,8 +51,8 @@ describe('vehicles CRUD (database)', () => {
 
 describe('per-vehicle record filtering (database)', () => {
   it('getLastFuelRecord filters by vehicle_id (no cross-vehicle mixing)', async () => {
-    const green = await insertVehicle(env.DB, '小绿', true);
-    const commute = await insertVehicle(env.DB, '通勤车', false);
+    const green = await insertVehicle(env.DB, '小绿', { isDefault: true });
+    const commute = await insertVehicle(env.DB, '通勤车', { isDefault: false });
 
     await insertFuelRecord(env.DB, { date: '2026-06-01', odometer: 10000, liters: 10, price_total: 98, vehicle_id: green });
     await insertFuelRecord(env.DB, { date: '2026-06-02', odometer: 50000, liters: 5, price_total: 40, vehicle_id: commute });
@@ -141,8 +141,8 @@ describe('log_fuel vehicle resolution (tools)', () => {
 
   it('AC4 — ambiguous when multiple vehicles and no default', async () => {
     // 直接建两辆都非默认的车，制造无默认 + 多车
-    await insertVehicle(env.DB, '小绿', false);
-    await insertVehicle(env.DB, '通勤车', false);
+    await insertVehicle(env.DB, '小绿', { isDefault: false });
+    await insertVehicle(env.DB, '通勤车', { isDefault: false });
     const result = await dispatchTool('log_fuel', {
       date: '2026-06-01', odometer: 12580, liters: 10, price_total: 98,
     }, env.DB);
@@ -160,8 +160,8 @@ describe('log_fuel vehicle resolution (tools)', () => {
   });
 
   it('consumption is computed per-vehicle (no cross-vehicle odometer)', async () => {
-    const green = await insertVehicle(env.DB, '小绿', true);
-    await insertVehicle(env.DB, '通勤车', false);
+    const green = await insertVehicle(env.DB, '小绿', { isDefault: true });
+    await insertVehicle(env.DB, '通勤车', { isDefault: false });
     // 小绿上次 9800km/10L；通勤车一条高里程记录不应干扰
     await insertFuelRecord(env.DB, { date: '2026-05-01', odometer: 9800, liters: 10, price_total: 97, vehicle_id: green });
     await insertFuelRecord(env.DB, { date: '2026-05-02', odometer: 99999, liters: 5, price_total: 40, vehicle_id: (await getVehicleByName(env.DB, '通勤车'))!.id });
@@ -179,8 +179,8 @@ describe('log_fuel vehicle resolution (tools)', () => {
 
 describe('query_stats / get_last_record per vehicle (tools)', () => {
   it('AC5 — query_stats only counts the named vehicle', async () => {
-    const green = await insertVehicle(env.DB, '小绿', true);
-    const commute = await insertVehicle(env.DB, '通勤车', false);
+    const green = await insertVehicle(env.DB, '小绿', { isDefault: true });
+    const commute = await insertVehicle(env.DB, '通勤车', { isDefault: false });
     // 小绿两条
     await insertFuelRecord(env.DB, { date: '2026-05-01', odometer: 9000, liters: 10, price_total: 97, vehicle_id: green });
     await insertFuelRecord(env.DB, { date: '2026-06-01', odometer: 9500, liters: 9, price_total: 88, vehicle_id: green });
@@ -194,8 +194,8 @@ describe('query_stats / get_last_record per vehicle (tools)', () => {
   });
 
   it('get_last_record returns the named vehicle latest', async () => {
-    const green = await insertVehicle(env.DB, '小绿', true);
-    const commute = await insertVehicle(env.DB, '通勤车', false);
+    const green = await insertVehicle(env.DB, '小绿', { isDefault: true });
+    const commute = await insertVehicle(env.DB, '通勤车', { isDefault: false });
     await insertFuelRecord(env.DB, { date: '2026-06-01', odometer: 9500, liters: 9, price_total: 88, vehicle_id: green });
     await insertFuelRecord(env.DB, { date: '2026-06-02', odometer: 20000, liters: 5, price_total: 40, vehicle_id: commute });
 
@@ -237,7 +237,7 @@ describe('rename_vehicle (tools)', () => {
   });
 
   it('AC-A2 — historical records show the new name after rename', async () => {
-    const green = await insertVehicle(env.DB, '小绿', true);
+    const green = await insertVehicle(env.DB, '小绿', { isDefault: true });
     await insertFuelRecord(env.DB, { date: '2026-05-01', odometer: 9000, liters: 10, price_total: 97, vehicle_id: green });
     await insertFuelRecord(env.DB, { date: '2026-06-01', odometer: 9500, liters: 9, price_total: 88, vehicle_id: green });
 

@@ -11,7 +11,7 @@
   - ✅ 已在本地 D1 验证：旧库灌入 2 条记录 → 跑迁移 → 自动建默认车「我的摩托」+ 两条记录回填 `vehicle_id=1`（AC8）。
   - 注：`ALTER TABLE ADD COLUMN` 非幂等（SQLite 限制），为一次性前向迁移；数据回填带 WHERE 守卫可重入。
 - [x] **T2 schema.sql 同步**：新库含 vehicles 表与记录表 `vehicle_id` 列 + 索引。
-  - ✅ 本地 `--file=schema.sql` 重置验证，4 张表就位。
+  - ✅ 本地 `--file=docs/schema.sql` 重置验证，4 张表就位。
 - [x] **T3 test/utils.ts 同步**：`initDB` 加 vehicles + `vehicle_id`；`clearDB` 加 `DELETE FROM vehicles`。
   - ✅ 既有 49 测试全绿。
 

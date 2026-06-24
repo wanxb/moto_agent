@@ -90,8 +90,8 @@ describe('update_last_fuel (tools)', () => {
   });
 
   it('AC7 — edits only the named vehicle latest record', async () => {
-    const green = await insertVehicle(env.DB, '小绿', true);
-    const commute = await insertVehicle(env.DB, '通勤车', false);
+    const green = await insertVehicle(env.DB, '小绿', { isDefault: true });
+    const commute = await insertVehicle(env.DB, '通勤车', { isDefault: false });
     await insertFuelRecord(env.DB, { date: '2026-06-01', odometer: 12580, liters: 10, price_total: 98, vehicle_id: green });
     await insertFuelRecord(env.DB, { date: '2026-06-01', odometer: 8200, liters: 5, price_total: 40, vehicle_id: commute });
 
@@ -124,7 +124,7 @@ describe('delete_last_fuel (tools)', () => {
   });
 
   it('deleted record no longer triggers a mileage reminder', async () => {
-    const green = await insertVehicle(env.DB, '小绿', true);
+    const green = await insertVehicle(env.DB, '小绿', { isDefault: true });
     await dispatchTool('set_reminder', { type: '机油', mode: 'mileage', trigger_odometer: 13000, vehicle: '小绿' }, env.DB);
     // 误填高里程触发条件
     await insertFuelRecord(env.DB, { date: '2026-06-01', odometer: 13500, liters: 10, price_total: 98, vehicle_id: green });

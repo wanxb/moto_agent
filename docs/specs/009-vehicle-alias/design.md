@@ -19,7 +19,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_vehicles_alias ON vehicles(alias) WHERE al
 - `alias` 可空（没有别名时用全名）。
 - 唯一索引：`WHERE alias IS NOT NULL` 保证两辆车不会重别名，但不约束 NULL。
 - 迁移 `migrations/0006_vehicle_alias.sql`（前向一次性 ALTER + 索引）。
-- 同步 `schema.sql`、`test/utils.ts`、`types.ts`（`Vehicle.alias`）。
+- 同步 `docs/schema.sql`、`test/utils.ts`、`types.ts`（`Vehicle.alias`）。
 
 ## 3. 数据访问层
 

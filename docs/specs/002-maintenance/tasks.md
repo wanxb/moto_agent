@@ -7,7 +7,7 @@
 
 ## 阶段 A — 数据模型
 
-- [x] **T1 迁移 + schema + utils**：`migrations/0002_maintenance.sql`（`IF NOT EXISTS` 可重入）；`schema.sql` 加表；`test/utils.ts` 同步；`types.ts` 加 `MaintenanceRecord`。
+- [x] **T1 迁移 + schema + utils**：`migrations/0002_maintenance.sql`（`IF NOT EXISTS` 可重入）；`docs/schema.sql` 加表；`test/utils.ts` 同步；`types.ts` 加 `MaintenanceRecord`。
   - ✅ 本地执行成功 + 二次执行验证可重入；既有 70 测试零回归。
 
 ## 阶段 B — 数据访问层（database.ts）

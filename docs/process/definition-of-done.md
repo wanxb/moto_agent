@@ -22,7 +22,7 @@
 
 - [ ] 对应 [`specs/`](../specs/) 三件套存在，`requirements.md` 的**全部验收标准（AC）满足**。
 - [ ] `tasks.md` 全部勾选。
-- [ ] 涉及 schema：迁移幂等、`schema.sql` 与 `test/utils.ts` 同步、本地→`--remote` 验证、存量数据零损失。
+- [ ] 涉及 schema：迁移幂等、`docs/schema.sql` 与 `test/utils.ts` 同步、本地→`--remote` 验证、存量数据零损失。
 - [ ] 涉及 `llm.ts`：DeepSeek + Anthropic 两条路径都测。
 - [ ] spec 状态更新为 ✔️ Done，[specs 索引](../specs/README.md) 同步。
 
@@ -42,12 +42,12 @@
 | 改动 | 必须更新的文档 |
 |------|--------------|
 | 新增/改工具 | [agent-design](../engineering/agent-design.md) §2、[CLAUDE.md](../../CLAUDE.md) §4 |
-| 改 schema | [data-model](../engineering/data-model.md) §1/§7、`schema.sql`、`test/utils.ts` |
+| 改 schema | [data-model](../engineering/data-model.md) §1/§7、`docs/schema.sql`、`test/utils.ts` |
 | 改鉴权/密钥 | [security](../engineering/security.md)、`.dev.vars.example` |
 | 改架构/分层 | [architecture](../engineering/architecture.md)、可能需 [ADR](../engineering/adr/) |
 | 换/加 LLM provider | [agent-design §4](../engineering/agent-design.md)、新 [ADR](../engineering/adr/) |
 | 改部署/运维流程 | [observability-ops](../engineering/observability-ops.md)、[README](../../README.md) |
-| 改产品范围/路线 | [PRD](../../PRD.md)、[roadmap](../product/roadmap.md) |
+| 改产品范围/路线 | [PRD](PRD.md)、[roadmap](../product/roadmap.md) |
 
 ---
 

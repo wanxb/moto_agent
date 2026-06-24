@@ -15,8 +15,8 @@ beforeEach(async () => { await clearDB(env.DB); });
 
 describe('getLatestOdometer', () => {
   it('takes max across fuel and mileage records, per vehicle', async () => {
-    const green = await insertVehicle(env.DB, '小绿', true);
-    const commute = await insertVehicle(env.DB, '通勤车', false);
+    const green = await insertVehicle(env.DB, '小绿', { isDefault: true });
+    const commute = await insertVehicle(env.DB, '通勤车', { isDefault: false });
     await insertFuelRecord(env.DB, { date: '2026-06-01', odometer: 12000, liters: 10, price_total: 98, vehicle_id: green });
     await insertMileageRecord(env.DB, { date: '2026-06-05', odometer: 12500, vehicle_id: green });
     await insertFuelRecord(env.DB, { date: '2026-06-02', odometer: 99999, liters: 5, price_total: 40, vehicle_id: commute });
@@ -34,7 +34,7 @@ describe('getLatestOdometer', () => {
 
 describe('reminders database layer', () => {
   it('insert + getActiveReminders joins vehicle name', async () => {
-    const green = await insertVehicle(env.DB, '小绿', true);
+    const green = await insertVehicle(env.DB, '小绿', { isDefault: true });
     await insertReminder(env.DB, { vehicle_id: green, type: '机油', mode: 'mileage', trigger_odometer: 13000 });
     const active = await getActiveReminders(env.DB);
     expect(active).toHaveLength(1);
@@ -43,8 +43,8 @@ describe('reminders database layer', () => {
   });
 
   it('listRemindersByVehicle filters by vehicle', async () => {
-    const green = await insertVehicle(env.DB, '小绿', true);
-    const commute = await insertVehicle(env.DB, '通勤车', false);
+    const green = await insertVehicle(env.DB, '小绿', { isDefault: true });
+    const commute = await insertVehicle(env.DB, '通勤车', { isDefault: false });
     await insertReminder(env.DB, { vehicle_id: green, type: '机油', mode: 'mileage', trigger_odometer: 13000 });
     await insertReminder(env.DB, { vehicle_id: commute, type: '保险', mode: 'date', trigger_date: '2027-01-01' });
     expect(await listRemindersByVehicle(env.DB, green)).toHaveLength(1);
@@ -114,8 +114,8 @@ describe('set_reminder (tools)', () => {
   });
 
   it('replacing is scoped per vehicle and per type', async () => {
-    const green = await insertVehicle(env.DB, '小绿', true);
-    await insertVehicle(env.DB, '通勤车', false);
+    const green = await insertVehicle(env.DB, '小绿', { isDefault: true });
+    await insertVehicle(env.DB, '通勤车', { isDefault: false });
     await dispatchTool('set_reminder', { type: '机油', mode: 'mileage', trigger_odometer: 13000, vehicle: '小绿' }, env.DB);
     await dispatchTool('set_reminder', { type: '保险', mode: 'date', trigger_date: '2027-01-01', vehicle: '小绿' }, env.DB);
     await dispatchTool('set_reminder', { type: '机油', mode: 'mileage', trigger_odometer: 20000, vehicle: '通勤车' }, env.DB);
@@ -163,7 +163,7 @@ describe('list_reminders / cancel_reminder (tools)', () => {
 
 describe('findDueReminders', () => {
   it('AC7 — date reminder due when today >= trigger_date', async () => {
-    const green = await insertVehicle(env.DB, '小绿', true);
+    const green = await insertVehicle(env.DB, '小绿', { isDefault: true });
     await insertReminder(env.DB, { vehicle_id: green, type: '保险', mode: 'date', trigger_date: '2026-06-01' });
 
     expect(await findDueReminders(env.DB, '2026-05-31')).toHaveLength(0);  // 未到
@@ -171,8 +171,8 @@ describe('findDueReminders', () => {
   });
 
   it('AC6/AC9 — mileage reminder due when vehicle latest odometer >= target (per vehicle)', async () => {
-    const green = await insertVehicle(env.DB, '小绿', true);
-    const commute = await insertVehicle(env.DB, '通勤车', false);
+    const green = await insertVehicle(env.DB, '小绿', { isDefault: true });
+    const commute = await insertVehicle(env.DB, '通勤车', { isDefault: false });
     await insertReminder(env.DB, { vehicle_id: green, type: '机油', mode: 'mileage', trigger_odometer: 13000 });
     // 通勤车里程很高，但不应影响小绿的提醒
     await insertFuelRecord(env.DB, { date: '2026-06-01', odometer: 99999, liters: 5, price_total: 40, vehicle_id: commute });
@@ -190,7 +190,7 @@ describe('findDueReminders', () => {
 
 describe('runScheduled', () => {
   it('AC8 — pushes due reminders once, then dedups on next run', async () => {
-    const green = await insertVehicle(env.DB, '小绿', true);
+    const green = await insertVehicle(env.DB, '小绿', { isDefault: true });
     await insertReminder(env.DB, { vehicle_id: green, type: '机油', mode: 'mileage', trigger_odometer: 13000 });
     await insertFuelRecord(env.DB, { date: '2026-06-05', odometer: 13050, liters: 10, price_total: 98, vehicle_id: green });
 
@@ -212,7 +212,7 @@ describe('runScheduled', () => {
   });
 
   it('does not mark done when push fails (retryable)', async () => {
-    const green = await insertVehicle(env.DB, '小绿', true);
+    const green = await insertVehicle(env.DB, '小绿', { isDefault: true });
     await insertReminder(env.DB, { vehicle_id: green, type: '保险', mode: 'date', trigger_date: '2026-01-01' });
 
     const failing = async () => { throw new Error('telegram down'); };
@@ -224,7 +224,7 @@ describe('runScheduled', () => {
   });
 
   it('AC-B1/B2 — mileage reminder with interval auto-renews to next', async () => {
-    const green = await insertVehicle(env.DB, '小绿', true);
+    const green = await insertVehicle(env.DB, '小绿', { isDefault: true });
     await insertReminder(env.DB, { vehicle_id: green, type: '机油', mode: 'mileage', trigger_odometer: 13000, interval_km: 3000 });
     await insertFuelRecord(env.DB, { date: '2026-06-05', odometer: 13050, liters: 10, price_total: 98, vehicle_id: green });
 
@@ -244,7 +244,7 @@ describe('runScheduled', () => {
   });
 
   it('AC-B3 — absolute mileage reminder (no interval) does NOT renew', async () => {
-    const green = await insertVehicle(env.DB, '小绿', true);
+    const green = await insertVehicle(env.DB, '小绿', { isDefault: true });
     await insertReminder(env.DB, { vehicle_id: green, type: '机油', mode: 'mileage', trigger_odometer: 13000 });
     await insertFuelRecord(env.DB, { date: '2026-06-05', odometer: 13050, liters: 10, price_total: 98, vehicle_id: green });
 

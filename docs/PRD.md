@@ -287,7 +287,7 @@ moto_agent/
 │   ├── database.ts       # D1 操作层
 │   ├── llm.ts            # DeepSeek/Anthropic 双模型封装
 │   └── types.ts          # 类型定义
-├── schema.sql            # D1 建表脚本
+├── docs/schema.sql       # D1 建表脚本
 ├── wrangler.toml         # Cloudflare 配置
 ├── package.json
 └── .dev.vars.example     # 本地开发环境变量模板
@@ -322,7 +322,7 @@ ALLOWED_CHAT_ID       # 单用户白名单
 ```bash
 # 1. 创建 D1 数据库并初始化 schema
 wrangler d1 create moto-agent-db
-wrangler d1 execute moto-agent-db --file=schema.sql
+wrangler d1 execute moto-agent-db --file=docs/schema.sql
 
 # 2. 创建 KV namespace
 wrangler kv:namespace create SESSION_KV

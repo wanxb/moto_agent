@@ -7,7 +7,7 @@
 
 ## 阶段 A — 数据模型
 
-- [x] **T1 迁移 + schema + utils + types**：`migrations/0004_soft_delete.sql`（`fuel_records` 加 `deleted_at` + 索引）；`schema.sql`、`test/utils.ts`、`types.ts` 同步。
+- [x] **T1 迁移 + schema + utils + types**：`migrations/0004_soft_delete.sql`（`fuel_records` 加 `deleted_at` + 索引）；`docs/schema.sql`、`test/utils.ts`、`types.ts` 同步。
   - ✅ 本地用 pre-004 表执行成功（存量行 `deleted_at`=NULL）；既有 100 测试零回归。
 
 ## 阶段 B — 数据访问层（database.ts）
