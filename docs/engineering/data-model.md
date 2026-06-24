@@ -54,6 +54,21 @@ CREATE TABLE maintenance_records (
     created_at  TEXT    NOT NULL DEFAULT (datetime('now'))
 );
 
+-- 定时提醒（spec 003）
+CREATE TABLE reminders (
+    id               INTEGER PRIMARY KEY AUTOINCREMENT,
+    vehicle_id       INTEGER,
+    type             TEXT    NOT NULL,       -- 机油/保险/年检…
+    mode             TEXT    NOT NULL,       -- 'mileage' | 'date'
+    trigger_odometer REAL,                   -- 里程模式目标里程
+    trigger_date     TEXT,                   -- 日期模式 ISO 日期
+    note             TEXT,
+    chat_id          TEXT,                   -- 推送目标（空→ ALLOWED_CHAT_ID）
+    status           TEXT    NOT NULL DEFAULT 'active',  -- active | done
+    fired_at         TEXT,
+    created_at       TEXT    NOT NULL DEFAULT (datetime('now'))
+);
+
 CREATE INDEX idx_fuel_date       ON fuel_records(date);
 CREATE INDEX idx_fuel_odometer   ON fuel_records(odometer);
 CREATE INDEX idx_fuel_vehicle    ON fuel_records(vehicle_id);
@@ -138,6 +153,7 @@ CREATE INDEX idx_vehicles_default ON vehicles(is_default);
 > |------|------|------|
 > | [`0001_multi_vehicle.sql`](../../migrations/0001_multi_vehicle.sql) | 多车管理：`vehicles` 表 + 记录表 `vehicle_id` + 存量回填默认车 | [spec 001](../specs/001-multi-vehicle/) |
 > | [`0002_maintenance.sql`](../../migrations/0002_maintenance.sql) | 维修保养：`maintenance_records` 表（纯新增，可重入） | [spec 002](../specs/002-maintenance/) |
+> | [`0003_reminders.sql`](../../migrations/0003_reminders.sql) | 定时提醒：`reminders` 表（纯新增，可重入） | [spec 003](../specs/003-reminders/) |
 
 ---
 
@@ -157,6 +173,7 @@ CREATE INDEX idx_vehicles_default ON vehicles(is_default);
 |------|------------|------|
 | **Phase 2 多车** ✅ | 新增 `vehicles` 表；`fuel_records`/`mileage_records` 加 `vehicle_id` | 已实现，见 [迁移 0001](../../migrations/0001_multi_vehicle.sql) · [spec 001](../specs/001-multi-vehicle/design.md) |
 | **Phase 2 维保** ✅ | 新增 `maintenance_records` 表（绑定 `vehicle_id`） | 已实现，见 [迁移 0002](../../migrations/0002_maintenance.sql) · [spec 002](../specs/002-maintenance/) |
+| **Phase 2 提醒** ✅ | 新增 `reminders` 表（绑定 `vehicle_id`，`chat_id` 预留多用户） | 已实现，见 [迁移 0003](../../migrations/0003_reminders.sql) · [spec 003](../specs/003-reminders/) |
 | **Phase 3 多用户** | 新增 `users` 表（存 `chat_id`）；各表加 `user_id` | 数据隔离前提，需先做 [security](security.md) 设计 |
 | **Phase 4** | 时序数据（OBD/GPS），可能引入独立存储 | 视数据量 |
 

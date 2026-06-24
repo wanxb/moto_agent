@@ -55,6 +55,11 @@ agentLoop(messages):
 | `set_default_vehicle` | `name` | 切换默认车 | ✅ 已切换 |
 | `log_maintenance` | `date, type`（+ `odometer`, `cost`, `note`, `vehicle`） | 记录保养（spec 002） | ✅ 已记录保养 |
 | `query_maintenance` | 无（+ `type`, `last_only`, `vehicle`） | 查询保养历史 / 某类型最近一次 | 🔧 保养记录 |
+| `set_reminder` | `type, mode`（+ `interval_km`/`trigger_odometer`/`trigger_date`, `vehicle`, `note`） | 设提醒（spec 003） | 🔔 已设置提醒 |
+| `list_reminders` | 无（+ `vehicle`） | 列活跃提醒 | 🔔 提醒列表 |
+| `cancel_reminder` | `type`（+ `vehicle`） | 取消提醒 | ✅ 已取消 |
+
+> **定时提醒（spec 003）**是首个非工具触发路径：除上述工具用于"设置/查看/取消"，到期推送由 Cron Triggers → `scheduled()` → `runScheduled()` 完成，不经 Agent Loop。见 [ADR-0006](adr/0006-cron-triggers-scheduled.md) 与 [架构 §2](architecture.md)。
 
 > **车辆解析（spec 001）**：带 `vehicle` 参数的工具统一经内部 `resolveVehicle(db, name?)` 把车名解析为 `vehicle_id`：指定→精确匹配；未指定→默认车；多车无默认→歧义反问；**无任何车辆→按单车/历史模式（vehicle_id 留空，不过滤），与 MVP 行为一致不退化**。详见 [`../specs/001-multi-vehicle/design.md`](../specs/001-multi-vehicle/design.md)。
 

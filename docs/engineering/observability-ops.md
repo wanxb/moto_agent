@@ -122,7 +122,20 @@ wrangler rollback [--message "原因"]        # 回滚到上一个稳定版本
 
 ---
 
-## 6. Phase 2 运维新增（前瞻）
+## 6. 定时任务（Cron Triggers，spec 003）
 
-- **Cron Triggers**（提醒功能）：`wrangler.toml` 加 `[triggers] crons`，新增定时入口；监控其执行日志。
-- 迁移目录化（`migrations/`），登记每次 schema 变更。
+- **配置**：`wrangler.toml` `[triggers] crons = ["0 1 * * *"]`（每日 01:00 UTC）。`deploy` 时自动注册/更新 Cron。
+- **入口**：`src/index.ts` 的 `scheduled()` → `src/scheduled.ts` `runScheduled(env)`，扫描到期提醒并推送。
+- **日志**：`[cron] scanned N due, fired M`；推送失败 `[cron] push failed ...`（保持 active 下次重试）。
+- **本地验证**：
+  ```bash
+  npx wrangler dev --test-scheduled
+  # 另开终端触发一次定时事件：
+  curl "http://localhost:8787/__scheduled?cron=0+1+*+*+*"
+  ```
+- **监控**：`wrangler tail` 看 `[cron]` 行；Dashboard → Worker → Triggers 可看 Cron 执行历史与成功率。
+- **去重保证**：提醒仅在推送成功后置 `done`，不会重复推送（见 [spec 003](../specs/003-reminders/) AC8）。
+
+## 7. 其它运维约定
+
+- 迁移目录化（`migrations/`），每次 schema 变更登记于 [data-model §5](data-model.md)。

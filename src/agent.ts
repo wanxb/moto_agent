@@ -24,7 +24,11 @@ function buildSystemPrompt(): string {
 
 维保规则：
 9. 用户记录保养（换机油/轮胎/保险/刹车/链条等）用 log_maintenance，抽取 type、里程、费用、日期；里程或费用没说就不传
-10. 查询保养历史用 query_maintenance；问"上次换 X"时传 type=X 且 last_only=true`;
+10. 查询保养历史用 query_maintenance；问"上次换 X"时传 type=X 且 last_only=true
+
+提醒规则：
+11. 设提醒用 set_reminder：里程类（"机油每3000公里"→mode=mileage,interval_km=3000；"机油到13000提醒"→mode=mileage,trigger_odometer=13000）；日期类（"保险2027-01-05到期"→mode=date,trigger_date=2027-01-05）
+12. "我设了哪些提醒"用 list_reminders；"取消X提醒"用 cancel_reminder（传 type=X）`;
 }
 
 export async function agentLoop(messages: Message[], env: Env): Promise<string> {

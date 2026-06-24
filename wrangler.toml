@@ -13,6 +13,10 @@ binding = "SESSION_KV"
 id = "2d40bc5b10a9453d80573163222b702e"
 preview_id = "c7e3944db10449e79cc12040fd5781e3"
 
+# Cron Triggers（spec 003 定时提醒）：每日 01:00 UTC 扫描到期提醒
+[triggers]
+crons = ["0 1 * * *"]
+
 # Secrets are set via: wrangler secret put SECRET_NAME
 # Required secrets:
 #   TELEGRAM_BOT_TOKEN

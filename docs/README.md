@@ -82,5 +82,6 @@ moto_agent/
 | `engineering/adr/0001-0005` | ✅ 已记录 | MVP 关键决策回溯 |
 | `specs/001-multi-vehicle` | ✔️ 已实现 | Phase 2 P0，代码+测试已落地，待线上部署 |
 | `specs/002-maintenance` | ✔️ 已实现 | Phase 2 P1，维保记录，代码+测试已落地，待线上部署 |
-| `specs/backlog.md` | 🟡 概览 | 其余功能（提醒/纠错/语音/导出/Dashboard）待详写 |
+| `specs/003-reminders` | ✔️ 已实现 | Phase 2 P1，定时提醒（Cron Triggers，首个非 webhook 入口），待部署 |
+| `specs/backlog.md` | 🟡 概览 | 其余功能（纠错/语音/导出/Dashboard）待详写 |
 | `product/*` · `process/*` | ✅ 初版 | — |

@@ -74,3 +74,22 @@ export interface MaintenanceRecord {
   vehicle_id: number | null;
   created_at: string;
 }
+
+export interface Reminder {
+  id: number;
+  vehicle_id: number | null;
+  type: string;
+  mode: 'mileage' | 'date';
+  trigger_odometer: number | null;
+  trigger_date: string | null;
+  note: string | null;
+  chat_id: string | null;
+  status: 'active' | 'done';
+  fired_at: string | null;
+  created_at: string;
+}
+
+// getActiveReminders 的 LEFT JOIN 结果，附带车辆名
+export interface ReminderWithVehicle extends Reminder {
+  vehicle_name: string | null;
+}

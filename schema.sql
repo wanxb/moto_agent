@@ -44,9 +44,26 @@ CREATE TABLE IF NOT EXISTS maintenance_records (
     created_at  TEXT    NOT NULL DEFAULT (datetime('now'))
 );
 
+-- 定时提醒（spec 003）
+CREATE TABLE IF NOT EXISTS reminders (
+    id               INTEGER PRIMARY KEY AUTOINCREMENT,
+    vehicle_id       INTEGER,
+    type             TEXT    NOT NULL,              -- 机油/保险/年检…
+    mode             TEXT    NOT NULL,              -- 'mileage' | 'date'
+    trigger_odometer REAL,
+    trigger_date     TEXT,
+    note             TEXT,
+    chat_id          TEXT,                          -- 推送目标（空→用 ALLOWED_CHAT_ID）
+    status           TEXT    NOT NULL DEFAULT 'active',
+    fired_at         TEXT,
+    created_at       TEXT    NOT NULL DEFAULT (datetime('now'))
+);
+
 CREATE INDEX IF NOT EXISTS idx_fuel_date     ON fuel_records(date);
 CREATE INDEX IF NOT EXISTS idx_fuel_odometer ON fuel_records(odometer);
 CREATE INDEX IF NOT EXISTS idx_fuel_vehicle    ON fuel_records(vehicle_id);
 CREATE INDEX IF NOT EXISTS idx_mileage_vehicle ON mileage_records(vehicle_id);
 CREATE INDEX IF NOT EXISTS idx_maint_vehicle   ON maintenance_records(vehicle_id);
 CREATE INDEX IF NOT EXISTS idx_maint_type      ON maintenance_records(type);
+CREATE INDEX IF NOT EXISTS idx_reminders_status  ON reminders(status);
+CREATE INDEX IF NOT EXISTS idx_reminders_vehicle ON reminders(vehicle_id);

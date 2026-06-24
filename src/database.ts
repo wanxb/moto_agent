@@ -1,4 +1,4 @@
-import { FuelRecord, Vehicle, MaintenanceRecord } from './types';
+import { FuelRecord, Vehicle, MaintenanceRecord, ReminderWithVehicle } from './types';
 
 // ── Fuel / mileage records ────────────────────────────────────────────────────
 
@@ -123,4 +123,62 @@ export async function getLastMaintenanceByType(
 ): Promise<MaintenanceRecord | null> {
   const records = await getMaintenanceRecords(db, { vehicleId, type, limit: 1 });
   return records[0] ?? null;
+}
+
+// 跨 fuel + mileage 记录取该车（或全部）最新里程，供里程提醒判定。
+export async function getLatestOdometer(db: D1Database, vehicleId?: number): Promise<number | null> {
+  const row = vehicleId === undefined
+    ? await db.prepare(
+        'SELECT MAX(o) AS m FROM (SELECT odometer o FROM fuel_records UNION ALL SELECT odometer o FROM mileage_records)'
+      ).first<{ m: number | null }>()
+    : await db.prepare(
+        'SELECT MAX(o) AS m FROM (SELECT odometer o FROM fuel_records WHERE vehicle_id = ?1 UNION ALL SELECT odometer o FROM mileage_records WHERE vehicle_id = ?1)'
+      ).bind(vehicleId).first<{ m: number | null }>();
+  return row?.m ?? null;
+}
+
+// ── Reminders (spec 003) ──────────────────────────────────────────────────────
+
+export async function insertReminder(db: D1Database, data: {
+  vehicle_id?: number | null; type: string; mode: 'mileage' | 'date';
+  trigger_odometer?: number | null; trigger_date?: string | null;
+  note?: string; chat_id?: string | null;
+}): Promise<number> {
+  const res = await db.prepare(
+    'INSERT INTO reminders (vehicle_id, type, mode, trigger_odometer, trigger_date, note, chat_id) VALUES (?, ?, ?, ?, ?, ?, ?)'
+  ).bind(
+    data.vehicle_id ?? null, data.type, data.mode,
+    data.trigger_odometer ?? null, data.trigger_date ?? null,
+    data.note ?? null, data.chat_id ?? null
+  ).run();
+  return res.meta.last_row_id as number;
+}
+
+export async function getActiveReminders(db: D1Database): Promise<ReminderWithVehicle[]> {
+  const { results } = await db.prepare(
+    `SELECT r.*, v.name AS vehicle_name
+       FROM reminders r LEFT JOIN vehicles v ON r.vehicle_id = v.id
+      WHERE r.status = 'active'
+      ORDER BY r.id ASC`
+  ).all<ReminderWithVehicle>();
+  return results;
+}
+
+export async function listRemindersByVehicle(db: D1Database, vehicleId?: number): Promise<ReminderWithVehicle[]> {
+  const all = await getActiveReminders(db);
+  return vehicleId === undefined ? all : all.filter(r => r.vehicle_id === vehicleId);
+}
+
+// 取消匹配的活跃提醒（按类型 + 可选车辆），返回受影响条数。
+export async function cancelReminders(db: D1Database, opts: { type: string; vehicleId?: number }): Promise<number> {
+  const stmt = opts.vehicleId === undefined
+    ? db.prepare("UPDATE reminders SET status = 'done' WHERE status = 'active' AND type = ?").bind(opts.type)
+    : db.prepare("UPDATE reminders SET status = 'done' WHERE status = 'active' AND type = ? AND vehicle_id = ?")
+        .bind(opts.type, opts.vehicleId);
+  const res = await stmt.run();
+  return res.meta.changes ?? 0;
+}
+
+export async function markReminderDone(db: D1Database, id: number, firedAt: string): Promise<void> {
+  await db.prepare("UPDATE reminders SET status = 'done', fired_at = ? WHERE id = ?").bind(firedAt, id).run();
 }

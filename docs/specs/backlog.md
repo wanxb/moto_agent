@@ -13,24 +13,15 @@
 
 ---
 
-## 定时提醒（保养/保险）
+## 定时提醒（保养/保险）→ 已升级为 [spec 003](003-reminders/)
 
-> 🔜 **下一个开发目标**（P1，依赖维保记录 ✔️ 已就绪）。
-
-- **阶段/优先级**：Phase 2 · P1 · 🟡 概览
-- **价值**：高——主动提醒换机油里程、保险到期，避免漏保养。
-- **范围**：基于里程阈值或日期触发主动推送；可设置/查看/取消提醒。
-- **设计方向**：
-  - 引入 **Cloudflare Cron Triggers**（`wrangler.toml` `[triggers] crons`），新增定时入口扫描到期提醒（替代教程 S13/S14 后台任务，见 [agent-design §6](../engineering/agent-design.md)）。
-  - 新表 `reminders`（`vehicle_id`、`type`、`trigger_odometer`/`trigger_date`、`status`）。
-  - 里程类提醒需当前里程估算（最近记录 + 日均里程）或在每次记录后检查阈值。
-  - 主动推送经 Telegram Bot API `sendMessage`（需存目标 `chat_id`）。
-- **依赖**：维保记录（提醒挂在保养项上）、多车。
-- **影响**：[architecture](../engineering/architecture.md)（新增 Cron 入口）、[observability-ops §6](../engineering/observability-ops.md)、[security](../engineering/security.md)（定时任务也要受控）。
+> 已从概览升级为完整规格并实现（✔️ 待部署）。引入 Cloudflare Cron Triggers（首个非 webhook 入口），见 [`003-reminders/`](003-reminders/) 与 [ADR-0006](../engineering/adr/0006-cron-triggers-scheduled.md)。
 
 ---
 
 ## 记录纠错/删除
+
+> 🔜 **下一个开发目标**（P2，无前置依赖）。
 
 - **阶段/优先级**：Phase 2 · P2 · 🟡 概览
 - **价值**：中——数据质量，记错能改（[S11](../product/personas.md#体验类)）。

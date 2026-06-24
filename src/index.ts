@@ -1,6 +1,7 @@
 import { Bot, webhookCallback } from 'grammy';
 import { Env } from './types';
 import { runAgent } from './session';
+import { runScheduled } from './scheduled';
 
 const WELCOME = `👋 摩托车油耗管理助手
 
@@ -68,5 +69,14 @@ export default {
       console.error('[worker] unhandled error:', e instanceof Error ? e.stack : String(e));
       return new Response('Internal Server Error', { status: 500 });
     }
+  },
+
+  // Cron Triggers 入口（spec 003 定时提醒）：每日扫描到期提醒并主动推送。
+  async scheduled(_controller: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
+    ctx.waitUntil(
+      runScheduled(env).catch(e =>
+        console.error('[cron] runScheduled error:', e instanceof Error ? e.stack : String(e))
+      )
+    );
   },
 };
