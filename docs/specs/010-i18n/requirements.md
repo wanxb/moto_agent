@@ -1,6 +1,6 @@
 # 需求：国际化（i18n）— 中英双语支持
 
-> 规格 010 · 状态：📋 Planned · 阶段：Phase 2 末 / Phase 3 · 优先级：P2
+> 规格 010 · 状态：✔️ Done · 阶段：Phase 2 末 / Phase 3 · 优先级：P2
 > 关联：[ADR-0008](../../engineering/adr/0008-i18n-bilingual.md)
 
 ## 1. 问题陈述

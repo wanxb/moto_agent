@@ -1,14 +1,15 @@
 import { Env } from './types';
+import type { Lang } from './i18n/types';
 import { WHISPER_MODEL } from './config';
 
 // 语音转文字（spec 008）。用 Cloudflare Workers AI 的 Whisper（ADR-0007）。
 
-export async function transcribe(bytes: Uint8Array, env: Env): Promise<string> {
+export async function transcribe(bytes: Uint8Array, env: Env, lang: Lang = 'zh'): Promise<string> {
   const audio = toBase64(bytes);   // whisper-large-v3-turbo 接收 base64 音频
   const res = await env.AI.run(WHISPER_MODEL, {
     audio,
     task: 'transcribe',
-    language: 'zh',
+    language: lang === 'en' ? 'en' : 'zh',
   });
   return ((res as { text?: string }).text ?? '').trim();
 }

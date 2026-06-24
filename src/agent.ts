@@ -4,6 +4,8 @@ import { TOOLS, registry } from './tools';
 import { callLLM } from './llm-transport';
 import type { ILLMProvider } from './ports';
 import type { ToolRegistry } from './tools/interface';
+import type { Lang } from './i18n/types';
+import { t } from './i18n';
 
 import { buildSystemPrompt } from './prompts';
 
@@ -11,7 +13,6 @@ export { buildSystemPrompt };
 
 /**
  * Agent Loop（新签名，R2）：LLM 与工具注册器由外部注入。
- * 兼容旧的 agentLoop(messages, env) —— 后者构造 ILLMProvider 后委托到这里。
  */
 export async function runAgentLoop(
   messages: Message[],
@@ -19,8 +20,9 @@ export async function runAgentLoop(
   tools: ToolDefinition[],
   registry: ToolRegistry,
   db: D1Database,
+  lang: Lang = 'zh',
 ): Promise<string> {
-  const systemMsg: Message = { role: 'system', content: buildSystemPrompt() };
+  const systemMsg: Message = { role: 'system', content: buildSystemPrompt(lang) };
   const working: Message[] = [systemMsg, ...messages];
 
   for (let round = 0; round < MAX_ROUNDS; round++) {
@@ -30,16 +32,16 @@ export async function runAgentLoop(
     messages.push(response.assistantMessage);
 
     if (!response.toolCalls?.length) {
-      return response.textContent ?? '（无回复）';
+      return response.textContent ?? t('general.no_reply', lang);
     }
 
     for (const tc of response.toolCalls) {
       let result: string;
       try {
-        result = await registry.dispatch(tc.name, tc.input, db);
+        result = await registry.dispatch(tc.name, tc.input, db, lang);
         console.log(`[tool] ${tc.name} →`, result.slice(0, 80));
       } catch (e) {
-        result = `工具执行失败：${e instanceof Error ? e.message : String(e)}`;
+        result = t('general.tool_error', lang, e instanceof Error ? e.message : String(e));
         console.error(`[tool] ${tc.name} error:`, e);
       }
       const toolMsg: Message = { role: 'tool', tool_call_id: tc.id, content: result };
@@ -48,32 +50,32 @@ export async function runAgentLoop(
     }
   }
 
-  return '处理超时，请重试。';
+  return t('general.timeout', lang);
 }
 
-// ── 旧签名（兼容现有调用方 + 测试，不引入 infra 依赖）───────────────────────
+// ── 旧签名（兼容现有调用方 + 测试）───────────────────────────────────────
 
-export async function agentLoop(messages: Message[], env: Env): Promise<string> {
-  const systemMsg: Message = { role: 'system', content: buildSystemPrompt() };
+export async function agentLoop(messages: Message[], env: Env, lang: Lang = 'zh'): Promise<string> {
+  const systemMsg: Message = { role: 'system', content: buildSystemPrompt(lang) };
   const working: Message[] = [systemMsg, ...messages];
 
   for (let round = 0; round < MAX_ROUNDS; round++) {
-    const response = await callLLM(working, TOOLS, env.DEEPSEEK_API_KEY, env.ANTHROPIC_API_KEY);
+    const response = await callLLM(working, registry.toOpenAI(lang), env.DEEPSEEK_API_KEY, env.ANTHROPIC_API_KEY);
 
     working.push(response.assistantMessage);
     messages.push(response.assistantMessage);
 
     if (!response.toolCalls?.length) {
-      return response.textContent ?? '（无回复）';
+      return response.textContent ?? t('general.no_reply', lang);
     }
 
     for (const tc of response.toolCalls) {
       let result: string;
       try {
-        result = await registry.dispatch(tc.name, tc.input, env.DB);
+        result = await registry.dispatch(tc.name, tc.input, env.DB, lang);
         console.log(`[tool] ${tc.name} →`, result.slice(0, 80));
       } catch (e) {
-        result = `工具执行失败：${e instanceof Error ? e.message : String(e)}`;
+        result = t('general.tool_error', lang, e instanceof Error ? e.message : String(e));
         console.error(`[tool] ${tc.name} error:`, e);
       }
       const toolMsg: Message = { role: 'tool', tool_call_id: tc.id, content: result };
@@ -82,5 +84,5 @@ export async function agentLoop(messages: Message[], env: Env): Promise<string> 
     }
   }
 
-  return '处理超时，请重试。';
+  return t('general.timeout', lang);
 }

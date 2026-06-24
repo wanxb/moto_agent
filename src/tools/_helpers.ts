@@ -1,6 +1,8 @@
 // 被多个工具复用的共享函数（不属于任何单一工具）。
 
 import type { Vehicle } from '../types';
+import type { Lang } from '../i18n/types';
+import { t, fmtKm, fmtCost } from '../i18n';
 import { getVehicleByNameOrAlias, getDefaultVehicle, listVehicles } from '../database';
 
 // ── 车辆解析（所有带 vehicle 参数的工具使用）─────────────────────────────────
@@ -26,16 +28,10 @@ export async function resolveVehicle(db: D1Database, name?: string): Promise<Veh
 }
 
 /** 多车无默认且未指明时生成反问文案 */
-export function ambiguousMsg(vehicles: Vehicle[], verb: string): string {
-  return `请指明${verb}哪辆车（你有：${vehicles.map(v => v.name).join('、')}）。`;
+export function ambiguousMsg(vehicles: Vehicle[], verb: string, lang: Lang): string {
+  return t('ambiguous.msg', lang, verb, vehicles.map(v => v.name).join('、'));
 }
 
 // ── 显示格式化 ───────────────────────────────────────────────────────────────
 
-export function fmtKm(odometer: number | null): string {
-  return odometer == null ? '—' : `${odometer.toLocaleString('zh')} km`;
-}
-
-export function fmtCost(cost: number | null): string {
-  return cost == null ? '—' : `¥${cost}`;
-}
+export { fmtKm, fmtCost };

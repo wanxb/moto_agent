@@ -1,4 +1,5 @@
 import type { ToolDefinition } from '../types';
+import type { Lang } from '../i18n/types';
 
 // ── Tool 接口：每个工具 = name + JSON Schema + execute ──────────────────────
 // 新增工具只需实现此接口并调用 registry.register()，不改 Registry 也不改 dispatch。
@@ -6,9 +7,10 @@ import type { ToolDefinition } from '../types';
 export interface Tool {
   name: string;
   description: string;
+  descriptionEn?: string;                // spec 010: 英文描述（toOpenAI('en') 时使用）
   parameters: Record<string, unknown>;    // JSON Schema（function-calling 的 parameters）
   required: string[];                     // 必填参数名列表
-  execute(input: Record<string, unknown>, db: D1Database): Promise<string>;
+  execute(input: Record<string, unknown>, db: D1Database, lang: Lang): Promise<string>;
 }
 
 // ── ToolRegistry：收集 + 生成 OpenAI 格式 + 分发 ────────────────────────────
@@ -27,14 +29,14 @@ export class ToolRegistry {
   }
 
   /** 生成 OpenAI/DeepSeek function-calling 的 tools 数组 */
-  toOpenAI(): ToolDefinition[] {
+  toOpenAI(lang: Lang = 'zh'): ToolDefinition[] {
     const defs: ToolDefinition[] = [];
     for (const t of this.tools.values()) {
       defs.push({
         type: 'function',
         function: {
           name: t.name,
-          description: t.description,
+          description: (lang === 'en' && t.descriptionEn) ? t.descriptionEn : t.description,
           parameters: {
             type: 'object',
             properties: t.parameters,
@@ -47,8 +49,9 @@ export class ToolRegistry {
   }
 
   /** 按 name 分发执行 */
-  async dispatch(name: string, input: Record<string, unknown>, db: D1Database): Promise<string> {
+  async dispatch(name: string, input: Record<string, unknown>, db: D1Database, lang: Lang = 'zh'): Promise<string> {
     const tool = this.get(name);
-    return tool ? tool.execute(input, db) : `未知工具：${name}`;
+    if (!tool) return lang === 'en' ? `Unknown tool: ${name}` : `未知工具：${name}`;
+    return tool.execute(input, db, lang);
   }
 }
