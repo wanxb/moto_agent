@@ -68,7 +68,7 @@ export const TOOLS: ToolDefinition[] = [
     type: 'function',
     function: {
       name: 'get_last_record',
-      description: '获取最近一条加油记录。',
+      description: '仅查询「最近/上次加油」记录的详情（如"上次什么时候加的油""最近一次加油多少钱"）。其它意图不要用此工具。',
       parameters: {
         type: 'object',
         properties: {
@@ -96,7 +96,7 @@ export const TOOLS: ToolDefinition[] = [
     type: 'function',
     function: {
       name: 'list_vehicles',
-      description: '列出全部车辆。用户问"我有哪些车"时调用。',
+      description: '仅列出全部车辆（如"我有哪些车""车辆列表"）。增车/改名/设默认请用对应工具，不要用此工具。',
       parameters: { type: 'object', properties: {}, required: [] },
     },
   },
@@ -118,7 +118,7 @@ export const TOOLS: ToolDefinition[] = [
     type: 'function',
     function: {
       name: 'rename_vehicle',
-      description: '给已有车辆改名。用户说"把X改名叫Y""X改成Y"时调用。',
+      description: '修改已有车辆的名称（重命名）。用户说"把X改名叫Y""X改成Y""把X重命名为Y""车名改成Y"时调用——这是改名，不是列出车辆。',
       parameters: {
         type: 'object',
         properties: {
@@ -168,7 +168,7 @@ export const TOOLS: ToolDefinition[] = [
     type: 'function',
     function: {
       name: 'set_reminder',
-      description: '设置提醒。里程类（如"机油每3000公里"/"机油到13000提醒"）或日期类（如"保险X日到期"）。',
+      description: '设置定时提醒。只要用户要"提醒"做某事就用它：里程类（"机油每3000公里提醒我""每3000公里提醒换机油"→mode=mileage+interval_km；"到13000公里提醒"→mode=mileage+trigger_odometer）；日期类（"保险2027-01-05到期提醒"→mode=date+trigger_date）。',
       parameters: {
         type: 'object',
         properties: {
