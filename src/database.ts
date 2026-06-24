@@ -1,4 +1,4 @@
-import { FuelRecord, Vehicle } from './types';
+import { FuelRecord, Vehicle, MaintenanceRecord } from './types';
 
 // ── Fuel / mileage records ────────────────────────────────────────────────────
 
@@ -84,4 +84,43 @@ export async function setDefaultVehicle(db: D1Database, id: number): Promise<voi
     db.prepare('UPDATE vehicles SET is_default = 0'),
     db.prepare('UPDATE vehicles SET is_default = 1 WHERE id = ?').bind(id),
   ]);
+}
+
+// ── Maintenance records (spec 002) ────────────────────────────────────────────
+
+export async function insertMaintenanceRecord(db: D1Database, data: {
+  date: string; type: string; odometer?: number | null;
+  cost?: number | null; note?: string; vehicle_id?: number | null;
+}): Promise<void> {
+  await db.prepare(
+    'INSERT INTO maintenance_records (date, type, odometer, cost, note, vehicle_id) VALUES (?, ?, ?, ?, ?, ?)'
+  ).bind(
+    data.date, data.type, data.odometer ?? null,
+    data.cost ?? null, data.note ?? null, data.vehicle_id ?? null
+  ).run();
+}
+
+// 按车（可选）+ 类型（可选，相等优先）过滤，按 date DESC, id DESC 倒序。
+export async function getMaintenanceRecords(db: D1Database, opts: {
+  vehicleId?: number; type?: string; limit?: number;
+} = {}): Promise<MaintenanceRecord[]> {
+  const where: string[] = [];
+  const binds: unknown[] = [];
+  if (opts.vehicleId !== undefined) { where.push('vehicle_id = ?'); binds.push(opts.vehicleId); }
+  if (opts.type !== undefined)      { where.push('type = ?');       binds.push(opts.type); }
+
+  let sql = 'SELECT * FROM maintenance_records';
+  if (where.length) sql += ' WHERE ' + where.join(' AND ');
+  sql += ' ORDER BY date DESC, id DESC';
+  if (opts.limit !== undefined) { sql += ' LIMIT ?'; binds.push(opts.limit); }
+
+  const { results } = await db.prepare(sql).bind(...binds).all<MaintenanceRecord>();
+  return results;
+}
+
+export async function getLastMaintenanceByType(
+  db: D1Database, type: string, vehicleId?: number
+): Promise<MaintenanceRecord | null> {
+  const records = await getMaintenanceRecords(db, { vehicleId, type, limit: 1 });
+  return records[0] ?? null;
 }

@@ -53,6 +53,8 @@ agentLoop(messages):
 | `add_vehicle` | `name` | 添加车辆（首辆自动设默认） | ✅ 已添加 |
 | `list_vehicles` | 无 | 列出全部车辆 | 🏍 车辆列表 |
 | `set_default_vehicle` | `name` | 切换默认车 | ✅ 已切换 |
+| `log_maintenance` | `date, type`（+ `odometer`, `cost`, `note`, `vehicle`） | 记录保养（spec 002） | ✅ 已记录保养 |
+| `query_maintenance` | 无（+ `type`, `last_only`, `vehicle`） | 查询保养历史 / 某类型最近一次 | 🔧 保养记录 |
 
 > **车辆解析（spec 001）**：带 `vehicle` 参数的工具统一经内部 `resolveVehicle(db, name?)` 把车名解析为 `vehicle_id`：指定→精确匹配；未指定→默认车；多车无默认→歧义反问；**无任何车辆→按单车/历史模式（vehicle_id 留空，不过滤），与 MVP 行为一致不退化**。详见 [`../specs/001-multi-vehicle/design.md`](../specs/001-multi-vehicle/design.md)。
 

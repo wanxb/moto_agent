@@ -7,21 +7,15 @@
 
 ---
 
-## 维修保养记录
+## 维修保养记录 → 已升级为 [spec 002](002-maintenance/)
 
-- **阶段/优先级**：Phase 2 · P1 · 🟡 概览
-- **价值**：高频真实需求；追踪换机油/轮胎/保险等保养历史，是提醒功能的数据来源。
-- **范围**：记录保养（类型、里程/日期、费用、备注）、查询保养历史、按车隔离。
-- **设计方向**：
-  - 新表 `maintenance_records`（绑定 `vehicle_id`，依赖[多车](001-multi-vehicle/)）：`type`（机油/轮胎/保险…）、`odometer`、`date`、`cost`、`note`。
-  - 新工具 `log_maintenance` / `query_maintenance`。
-  - schema 只增不删；保养类型用枚举 + 自由文本兜底。
-- **依赖**：多车管理（001）。
-- **影响**：[data-model](../engineering/data-model.md) §7、[agent-design](../engineering/agent-design.md) §2 工具表。
+> 已从概览升级为完整规格并实现（✔️ 待部署）。详见 [`002-maintenance/`](002-maintenance/)。
 
 ---
 
 ## 定时提醒（保养/保险）
+
+> 🔜 **下一个开发目标**（P1，依赖维保记录 ✔️ 已就绪）。
 
 - **阶段/优先级**：Phase 2 · P1 · 🟡 概览
 - **价值**：高——主动提醒换机油里程、保险到期，避免漏保养。

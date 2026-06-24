@@ -42,6 +42,18 @@ CREATE TABLE mileage_records (
     created_at  TEXT    NOT NULL DEFAULT (datetime('now'))
 );
 
+-- 维修保养记录（spec 002）
+CREATE TABLE maintenance_records (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    date        TEXT    NOT NULL,
+    type        TEXT    NOT NULL,           -- 机油/轮胎/保险/刹车/链条/其他（自由文本）
+    odometer    REAL,                       -- 里程（可空：保险等无里程）
+    cost        REAL,                       -- 费用（可空）
+    note        TEXT,
+    vehicle_id  INTEGER,                    -- 所属车辆（spec 001）
+    created_at  TEXT    NOT NULL DEFAULT (datetime('now'))
+);
+
 CREATE INDEX idx_fuel_date       ON fuel_records(date);
 CREATE INDEX idx_fuel_odometer   ON fuel_records(odometer);
 CREATE INDEX idx_fuel_vehicle    ON fuel_records(vehicle_id);
@@ -125,6 +137,7 @@ CREATE INDEX idx_vehicles_default ON vehicles(is_default);
 > | 迁移 | 内容 | 关联 |
 > |------|------|------|
 > | [`0001_multi_vehicle.sql`](../../migrations/0001_multi_vehicle.sql) | 多车管理：`vehicles` 表 + 记录表 `vehicle_id` + 存量回填默认车 | [spec 001](../specs/001-multi-vehicle/) |
+> | [`0002_maintenance.sql`](../../migrations/0002_maintenance.sql) | 维修保养：`maintenance_records` 表（纯新增，可重入） | [spec 002](../specs/002-maintenance/) |
 
 ---
 
@@ -143,7 +156,7 @@ CREATE INDEX idx_vehicles_default ON vehicles(is_default);
 | 阶段 | Schema 变更 | 说明 |
 |------|------------|------|
 | **Phase 2 多车** ✅ | 新增 `vehicles` 表；`fuel_records`/`mileage_records` 加 `vehicle_id` | 已实现，见 [迁移 0001](../../migrations/0001_multi_vehicle.sql) · [spec 001](../specs/001-multi-vehicle/design.md) |
-| **Phase 2 维保** | 新增 `maintenance_records` 表（绑定 `vehicle_id`） | [backlog](../specs/backlog.md) |
+| **Phase 2 维保** ✅ | 新增 `maintenance_records` 表（绑定 `vehicle_id`） | 已实现，见 [迁移 0002](../../migrations/0002_maintenance.sql) · [spec 002](../specs/002-maintenance/) |
 | **Phase 3 多用户** | 新增 `users` 表（存 `chat_id`）；各表加 `user_id` | 数据隔离前提，需先做 [security](security.md) 设计 |
 | **Phase 4** | 时序数据（OBD/GPS），可能引入独立存储 | 视数据量 |
 

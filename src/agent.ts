@@ -20,7 +20,11 @@ function buildSystemPrompt(): string {
 多车规则：
 6. 用户可能管理多辆车。消息里提到车名时，把车名作为 vehicle 参数传给对应工具；没提到则不传（工具会用默认车）
 7. 工具返回提示需要指明车辆时，按提示向用户反问是哪辆车
-8. "我有哪些车"用 list_vehicles；"添加车 xxx"用 add_vehicle；"默认车设成 xxx"用 set_default_vehicle`;
+8. "我有哪些车"用 list_vehicles；"添加车 xxx"用 add_vehicle；"默认车设成 xxx"用 set_default_vehicle
+
+维保规则：
+9. 用户记录保养（换机油/轮胎/保险/刹车/链条等）用 log_maintenance，抽取 type、里程、费用、日期；里程或费用没说就不传
+10. 查询保养历史用 query_maintenance；问"上次换 X"时传 type=X 且 last_only=true`;
 }
 
 export async function agentLoop(messages: Message[], env: Env): Promise<string> {

@@ -63,3 +63,14 @@ export interface Vehicle {
   user_id: number | null;
   created_at: string;
 }
+
+export interface MaintenanceRecord {
+  id: number;
+  date: string;
+  type: string;
+  odometer: number | null;
+  cost: number | null;
+  note: string | null;
+  vehicle_id: number | null;
+  created_at: string;
+}
