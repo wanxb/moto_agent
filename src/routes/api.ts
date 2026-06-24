@@ -7,29 +7,36 @@ import type { FuelRecord } from '../types';
 
 // ── Token 鉴权 ───────────────────────────────────────────────────────────────
 
+const CORS_HEADERS = { 'Access-Control-Allow-Origin': '*', 'Content-Type': 'application/json' };
+
 function tokenAuth(request: Request, env: { ALLOWED_CHAT_ID?: string }): Response | null {
   const expected = env.ALLOWED_CHAT_ID;
   if (!expected) return null;  // 未设 ALLOWED_CHAT_ID → Dashboard 开放（单用户阶段安全等效）
   const url = new URL(request.url);
   const token = url.searchParams.get('token') ?? request.headers.get('Authorization')?.replace(/^Bearer\s+/i, '');
-  if (token !== expected) return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: { 'Content-Type': 'application/json' } });
+  if (token !== expected) return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: CORS_HEADERS });
   return null;
 }
 
 // ── 入口 ──────────────────────────────────────────────────────────────────────
 
 export async function handleApiRequest(request: Request, env: { DB: D1Database; ALLOWED_CHAT_ID?: string }): Promise<Response> {
+  // CORS preflight（浏览器跨域 fetch 先发 OPTIONS）
+  if (request.method === 'OPTIONS') {
+    return new Response(null, { status: 204, headers: { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET, OPTIONS', 'Access-Control-Allow-Headers': 'Authorization, Content-Type' } });
+  }
+
   const authErr = tokenAuth(request, env);
   if (authErr) return authErr;
 
   const url = new URL(request.url);
-  const json = (data: unknown) => new Response(JSON.stringify(data), { status: 200, headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' } });
+  const json = (data: unknown) => new Response(JSON.stringify(data), { status: 200, headers: CORS_HEADERS });
 
   switch (url.pathname) {
     case '/api/v1/stats':     return json(await fuelStats(env.DB, url));
     case '/api/v1/vehicles':  return json(await vehicleList(env.DB));
     case '/api/v1/reminders': return json(await reminderList(env.DB));
-    default:                  return new Response(JSON.stringify({ error: 'Not Found' }), { status: 404, headers: { 'Content-Type': 'application/json' } });
+    default:                  return new Response(JSON.stringify({ error: 'Not Found' }), { status: 404, headers: CORS_HEADERS });
   }
 }
 

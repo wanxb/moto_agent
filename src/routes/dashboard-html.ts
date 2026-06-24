@@ -60,8 +60,8 @@ let chart;
 async function fetchApi(path) {
   const v = vehicle.value;
   const sep = path.includes('?') ? '&' : '?';
-  const q = v ? (sep + 'vehicle=' + encodeURIComponent(v)) : '';
-  const r = await fetch(path + '?token=' + TOKEN + q);
+  const q = v ? ('&vehicle=' + encodeURIComponent(v)) : '';
+  const r = await fetch(path + sep + 'token=' + TOKEN + q);
   if (!r.ok) throw new Error(r.status + ' ' + (await r.text()));
   return r.json();
 }
