@@ -1,6 +1,8 @@
 export interface Env {
   DB: D1Database;
   SESSION_KV: KVNamespace;
+  // Cloudflare Workers AI 绑定（spec 008 语音转文字）。最小接口，与 workers-types 的逐模型 schema 解耦。
+  AI: { run(model: string, inputs: Record<string, unknown>): Promise<unknown> };
   TELEGRAM_BOT_TOKEN: string;
   TELEGRAM_WEBHOOK_SECRET: string;
   DEEPSEEK_API_KEY: string;

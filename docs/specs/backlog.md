@@ -25,11 +25,15 @@
 
 ---
 
-## 语音输入
+## 语音输入 → 已升级为 [spec 008](008-voice-input/)
 
-> 🔜 **下一个开发目标**（P2）。
+> 已从概览升级为完整规格并实现（✔️ 待部署+冒烟）。用 Cloudflare Workers AI（Whisper）转写，留在 CF 生态、无需转码、无新 key。详见 [`008-voice-input/`](008-voice-input/) 与 [ADR-0007](../engineering/adr/0007-cloudflare-workers-ai-stt.md)。
 
-- **阶段/优先级**：Phase 2 · P2 · 🟡 概览
+---
+
+## 语音输入（原概览，已实现）
+
+- **阶段/优先级**：Phase 2 · P2 · ✔️ 已实现
 - **价值**：中——加油站戴手套时语音更方便。
 - **范围**：接收 Telegram 语音消息（OGG），转文字后走现有解析链路。
 - **设计方向**：

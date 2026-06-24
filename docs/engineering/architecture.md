@@ -45,8 +45,9 @@
 
 | 组件 | 文件 | 职责 | 不负责 |
 |------|------|------|--------|
-| **Webhook 入口** | `src/index.ts` | grammY bot、webhook secret 校验、命令路由（`/start` `/help` `/last` `/stats`）、访问控制中间件 | 业务逻辑 |
+| **Webhook 入口** | `src/index.ts` | grammY bot、webhook secret 校验、命令路由、文本/**语音**消息路由、访问控制中间件 | 业务逻辑 |
 | **定时入口** | `src/index.ts` `scheduled()` + `src/scheduled.ts` | Cron Triggers 唤醒，扫描到期提醒并主动推送（spec 003） | 业务计算、SQL |
+| **语音转写** | `src/stt.ts` | `transcribe()`：Workers AI Whisper 把语音 OGG 转中文文本（spec 008） | 业务逻辑 |
 | **会话编排** | `src/session.ts` | KV 读写、调用 Agent Loop、回复前 `toPlainText` 清洗 markdown（spec 005）、截断历史 | LLM 细节、SQL |
 | **输出格式化** | `src/format.ts` | `toPlainText`：去 markdown 保留 emoji，供 Telegram 纯文本显示 | 业务逻辑 |
 | **Agent Loop** | `src/agent.ts` | system prompt、`while` 循环、工具调度、轮数护栏 | 具体工具实现、HTTP |

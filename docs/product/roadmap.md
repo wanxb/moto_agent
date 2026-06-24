@@ -35,7 +35,7 @@
 | **P1** | 维修保养记录 | 高（高频真实需求） | 中 | 多车（保养绑定到车）✔️ | [`../specs/002-maintenance/`](../specs/002-maintenance/) ✔️ 已实现（待部署） |
 | **P1** | 定时提醒（保养/保险） | 高 | 中（引入 Cron Triggers） | 维保记录 ✔️ | [`../specs/003-reminders/`](../specs/003-reminders/) ✔️ 已实现（待部署） |
 | **P2** | 记录纠错/删除 | 中（数据质量） | 低 | 无 | [`../specs/004-record-edit/`](../specs/004-record-edit/) ✔️ 已实现（待部署） |
-| **P2** | 语音输入 | 中（便利性） | 高（STT/Whisper + 音频处理） | 无 | [`../specs/backlog.md`](../specs/backlog.md) |
+| **P2** | 语音输入 | 中（便利性） | 中（Workers AI Whisper，无需转码） | 无 | [`../specs/008-voice-input/`](../specs/008-voice-input/) ✔️ 已实现（待部署） |
 | **P3** | 数据导出（CSV） | 低 | 低 | 无 | [`../specs/backlog.md`](../specs/backlog.md) |
 
 > **为什么多车优先**：它是 schema 演进的第一步（引入 `vehicles` 表 + 外键），维保、提醒、未来多用户都要挂在车辆维度上。先把这个数据基座打好，后续功能成本更低。详见 [ADR-0005 演进](../engineering/data-model.md)。

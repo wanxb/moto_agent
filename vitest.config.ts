@@ -4,7 +4,8 @@ export default defineWorkersConfig({
   test: {
     poolOptions: {
       workers: {
-        wrangler: { configPath: './wrangler.toml' },
+        // 用 wrangler.test.toml（无 [ai] 绑定）：Workers AI 在本地测试运行时不可用
+        wrangler: { configPath: './wrangler.test.toml' },
         miniflare: {
           // Provide test values for secrets (not in wrangler.toml)
           bindings: {

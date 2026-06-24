@@ -63,6 +63,7 @@
 ## 5. 第三方数据外发
 
 - 用户消息文本会发送给 DeepSeek / Anthropic 以解析。MVP 数据为油耗/里程，无强隐私字段。
+- **语音音频**（spec 008）由 **Cloudflare Workers AI（Whisper）** 转写，**音频不出 Cloudflare**（[ADR-0007](adr/0007-cloudflare-workers-ai-stt.md)），隐私优于外发 OpenAI/Groq。
 - 选型偏好可信 provider；不向不必要的第三方转发数据。
 - Phase 3 多用户时应在隐私说明中告知用户数据会经 LLM 处理。
 

@@ -2,6 +2,9 @@ import { Bot, webhookCallback } from 'grammy';
 import { Env } from './types';
 import { runAgent } from './session';
 import { runScheduled } from './scheduled';
+import { transcribe } from './stt';
+
+const MAX_VOICE_SECONDS = 60;
 
 const WELCOME = `👋 摩托车油耗管理助手
 
@@ -46,6 +49,41 @@ function createBot(env: Env): Bot {
   bot.on('message:text', ctx =>
     runAgent(ctx.chat.id.toString(), ctx.message.text, env, ctx)
   );
+
+  // 语音输入（spec 008）：转文字后走与打字完全相同的链路
+  bot.on('message:voice', async ctx => {
+    const chatId = ctx.chat.id.toString();
+    const voice = ctx.message.voice;
+
+    if (voice.duration > MAX_VOICE_SECONDS) {
+      await ctx.reply(`语音有点长（${voice.duration}s），请控制在 ${MAX_VOICE_SECONDS} 秒内，或直接打字。`);
+      return;
+    }
+
+    let text: string;
+    try {
+      const file = await ctx.getFile();
+      if (!file.file_path) throw new Error('no file_path');
+      const url = `https://api.telegram.org/file/bot${env.TELEGRAM_BOT_TOKEN}/${file.file_path}`;
+      const audioRes = await fetch(url);
+      if (!audioRes.ok) throw new Error(`download ${audioRes.status}`);
+      const bytes = new Uint8Array(await audioRes.arrayBuffer());
+      text = await transcribe(bytes, env);
+    } catch (e) {
+      console.error('[voice] stt error:', e instanceof Error ? e.message : String(e));
+      await ctx.reply('语音识别失败，请再说一遍或直接打字。');
+      return;
+    }
+
+    console.log(`[voice] duration=${voice.duration} chars=${text.length}`);
+    if (!text) {
+      await ctx.reply('没听清，请再说一遍或直接打字。');
+      return;
+    }
+
+    await ctx.reply(`🎙 听到：${text}`);
+    await runAgent(chatId, text, env, ctx);
+  });
 
   return bot;
 }

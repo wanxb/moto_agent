@@ -13,6 +13,7 @@
   | `[agent]` | `session.ts` Loop 异常 |
   | `[tool]` | 工具执行结果/错误 |
   | `[llm]` | fallback 切换等 |
+  | `[voice]` | 语音输入（spec 008）：`duration=.. chars=..`；STT 失败 `[voice] stt error` |
   | `[metric]` | 指标埋点（spec 006）：`latency_ms=.. status=ok\|error chat=..`，见 [metrics](../product/metrics.md) |
 - **去向**：Cloudflare Workers Dashboard 实时日志（`wrangler tail`）+ Logpush（可配）。
 - **纪律**：不打印完整 secret/token；不打印超长 LLM 原文（截断，参考 `agent.ts` 的 `.slice(0,80)`）。

@@ -22,5 +22,6 @@
 | [0004](0004-self-built-agent-loop.md) | 自实现 Agent Loop 而非框架 | ✅ Accepted |
 | [0005](0005-d1-kv-storage.md) | D1（业务）+ KV（会话）双存储 | ✅ Accepted |
 | [0006](0006-cron-triggers-scheduled.md) | 定时提醒用 Cron Triggers + scheduled() | ✅ Accepted |
+| [0007](0007-cloudflare-workers-ai-stt.md) | 语音转文字用 Cloudflare Workers AI (Whisper) | ✅ Accepted |
 
 > 新增 ADR 后在此表登记，并在 [`docs/README.md`](../../README.md) 文档状态表体现（如有结构变化）。
