@@ -559,15 +559,18 @@ async function setReminder(input: Record<string, unknown>, db: D1Database): Prom
       target = basis + interval_km;
       basisNote = `（上次 ${basis.toLocaleString('zh')} km + ${interval_km}）`;
     }
+    // 同车同类型只保留一条：先作废旧的，再建新的（避免改间隔时叠加重复提醒）
+    const replaced = await cancelReminders(db, { type, vehicleId });
     await insertReminder(db, { vehicle_id: vehicleId, type, mode: 'mileage', trigger_odometer: target, interval_km: intervalToStore, note });
     const renewNote = intervalToStore != null ? `\n（每 ${intervalToStore} km 自动续期）` : '';
-    return `🔔 已设置提醒${tag}\n${type} · 里程达到 ${target.toLocaleString('zh')} km 时提醒${basisNote}${renewNote}`;
+    return `${replaced > 0 ? '🔁 已更新提醒' : '🔔 已设置提醒'}${tag}\n${type} · 里程达到 ${target.toLocaleString('zh')} km 时提醒${basisNote}${renewNote}`;
   }
 
   // date mode
   if (!trigger_date) return '日期提醒需要给一个到期日期（如 2027-01-05）。';
+  const replaced = await cancelReminders(db, { type, vehicleId });
   await insertReminder(db, { vehicle_id: vehicleId, type, mode: 'date', trigger_date, note });
-  return `🔔 已设置提醒${tag}\n${type} · ${trigger_date} 到期时提醒`;
+  return `${replaced > 0 ? '🔁 已更新提醒' : '🔔 已设置提醒'}${tag}\n${type} · ${trigger_date} 到期时提醒`;
 }
 
 async function listRemindersTool(input: Record<string, unknown>, db: D1Database): Promise<string> {

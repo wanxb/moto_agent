@@ -100,6 +100,33 @@ describe('set_reminder (tools)', () => {
     const result = await dispatchTool('set_reminder', { type: '保险', mode: 'date' }, env.DB);
     expect(result).toContain('到期日期');
   });
+
+  it('setting same type+vehicle replaces the old reminder (no duplicate)', async () => {
+    await dispatchTool('add_vehicle', { name: '小绿' }, env.DB);
+    await dispatchTool('set_reminder', { type: '机油', mode: 'mileage', trigger_odometer: 13000 }, env.DB);
+    // 改成 2000 间隔（绝对目标 15000）
+    const result = await dispatchTool('set_reminder', { type: '机油', mode: 'mileage', trigger_odometer: 15000 }, env.DB);
+    expect(result).toContain('🔁 已更新提醒');
+
+    const active = await getActiveReminders(env.DB);
+    expect(active).toHaveLength(1);            // 不叠加
+    expect(active[0].trigger_odometer).toBe(15000);
+  });
+
+  it('replacing is scoped per vehicle and per type', async () => {
+    const green = await insertVehicle(env.DB, '小绿', true);
+    await insertVehicle(env.DB, '通勤车', false);
+    await dispatchTool('set_reminder', { type: '机油', mode: 'mileage', trigger_odometer: 13000, vehicle: '小绿' }, env.DB);
+    await dispatchTool('set_reminder', { type: '保险', mode: 'date', trigger_date: '2027-01-01', vehicle: '小绿' }, env.DB);
+    await dispatchTool('set_reminder', { type: '机油', mode: 'mileage', trigger_odometer: 20000, vehicle: '通勤车' }, env.DB);
+
+    // 替换小绿的机油，不应动小绿的保险或通勤车的机油
+    await dispatchTool('set_reminder', { type: '机油', mode: 'mileage', trigger_odometer: 16000, vehicle: '小绿' }, env.DB);
+    const active = await getActiveReminders(env.DB);
+    expect(active).toHaveLength(3);
+    const greenOil = active.find(r => r.vehicle_id === green && r.type === '机油');
+    expect(greenOil!.trigger_odometer).toBe(16000);
+  });
 });
 
 // ── tools: list / cancel ──────────────────────────────────────────────────────

@@ -86,5 +86,6 @@ moto_agent/
 | `specs/004-record-edit` | ✔️ 已实现 | Phase 2 P2，记录纠错/软删除，待部署 |
 | `specs/005-rename-and-plaintext` | ✔️ 已实现 | 上线后反馈：车辆改名 + Telegram 纯文本输出（去 markdown 保 emoji） |
 | `specs/006-hardening` | ✔️ 已实现 | 质量加固：指标埋点 + 提醒自动续期 + LLM 评测集（`npm run eval`） |
+| `specs/007-reminder-replace-and-context` | ✔️ 已实现 | 修复：set_reminder 同类替换不叠加 + 会话历史按回合截断 |
 | `specs/backlog.md` | 🟡 概览 | 其余功能（语音/导出/Dashboard）待详写 |
 | `product/*` · `process/*` | ✅ 初版 | — |

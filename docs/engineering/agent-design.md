@@ -56,7 +56,7 @@ agentLoop(messages):
 | `rename_vehicle` | `name, new_name` | 车辆改名（spec 005，历史记录自动显示新名） | ✅ 已改名 |
 | `log_maintenance` | `date, type`（+ `odometer`, `cost`, `note`, `vehicle`） | 记录保养（spec 002） | ✅ 已记录保养 |
 | `query_maintenance` | 无（+ `type`, `last_only`, `vehicle`） | 查询保养历史 / 某类型最近一次 | 🔧 保养记录 |
-| `set_reminder` | `type, mode`（+ `interval_km`/`trigger_odometer`/`trigger_date`, `vehicle`, `note`） | 设提醒（spec 003；间隔模式触发后自动续期 spec 006） | 🔔 已设置提醒 |
+| `set_reminder` | `type, mode`（+ `interval_km`/`trigger_odometer`/`trigger_date`, `vehicle`, `note`） | 设提醒（spec 003；间隔模式触发后自动续期 spec 006；同车同类型替换旧的 spec 007） | 🔔 已设置/🔁 已更新 |
 | `list_reminders` | 无（+ `vehicle`） | 列活跃提醒 | 🔔 提醒列表 |
 | `cancel_reminder` | `type`（+ `vehicle`） | 取消提醒 | ✅ 已取消 |
 | `update_last_fuel` | 无（+ 可改字段, `vehicle`） | 改最近一条加油记录（spec 004） | ✏️ 已修改 |
@@ -144,9 +144,10 @@ return callAnthropic()                       # 切备用模型
 
 见 `src/session.ts`：
 
-- 每 `chatId` 一份历史，存 KV `session:{chatId}`，**保留最近 `MAX_SESSION_MESSAGES = 10` 条**，**TTL `SESSION_TTL = 3600`s（1h）**。
+- 每 `chatId` 一份历史，存 KV `session:{chatId}`，**保留约 `MAX_SESSION_MESSAGES = 10` 条**，**TTL `SESSION_TTL = 3600`s（1h）**。
 - system prompt **不入**历史（每次新鲜生成）。
-- 截断策略：`messages.slice(-10)`——简单尾部保留。复杂多轮澄清可能丢早期上下文（已知取舍，见 [`../../PRD.md`](../../PRD.md) §11）。
+- 截断策略：`trimHistory()`——**按完整回合对齐**（spec 007）：在 ≤ maxMessages 前提下尽量多保留，且**必从 `user` 消息起**，绝不把 assistant 的 `tool_calls` 与其 `tool` 结果切散（否则下次请求悬空配对会被模型 API 拒绝）。单个回合超长时宁可超额也从该回合 `user` 起。
+- 这 10 条**含 tool 调用/结果消息**，故实际记住的对话轮次更短；复杂多轮澄清仍可能丢早期上下文（已知取舍，见 [`../../PRD.md`](../../PRD.md) §11）。
 
 > 当前不引入上下文压缩/持久记忆（教程 S08/S09），Phase 4 视需要再加。
 
