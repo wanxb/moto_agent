@@ -61,6 +61,7 @@ export interface FuelRecord {
 export interface Vehicle {
   id: number;
   name: string;
+  alias: string | null;  // 简称/别名（spec 009）
   is_default: number;   // 0 | 1
   is_active: number;    // 0 | 1
   user_id: number | null;

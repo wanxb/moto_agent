@@ -104,6 +104,16 @@ export async function renameVehicle(db: D1Database, id: number, newName: string)
   await db.prepare('UPDATE vehicles SET name = ? WHERE id = ?').bind(newName, id).run();
 }
 
+// 按全名或别名匹配（spec 009）。用于 resolveVehicle 等用户侧指代。
+export async function getVehicleByNameOrAlias(db: D1Database, nameOrAlias: string): Promise<Vehicle | null> {
+  return db.prepare('SELECT * FROM vehicles WHERE (name = ? OR alias = ?) AND is_active = 1 LIMIT 1')
+    .bind(nameOrAlias, nameOrAlias).first<Vehicle>();
+}
+
+export async function setVehicleAlias(db: D1Database, id: number, alias: string | null): Promise<void> {
+  await db.prepare('UPDATE vehicles SET alias = ? WHERE id = ?').bind(alias, id).run();
+}
+
 // 默认车不变量：同一时刻仅一辆 is_default=1。清零 + 置位放在一个 batch 内保证原子。
 export async function setDefaultVehicle(db: D1Database, id: number): Promise<void> {
   await db.batch([

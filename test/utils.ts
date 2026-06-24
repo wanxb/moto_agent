@@ -5,6 +5,7 @@ export async function initDB(db: D1Database): Promise<void> {
     db.prepare(`CREATE TABLE IF NOT EXISTS vehicles (
       id          INTEGER PRIMARY KEY AUTOINCREMENT,
       name        TEXT    NOT NULL,
+      alias       TEXT,
       is_default  INTEGER NOT NULL DEFAULT 0,
       is_active   INTEGER NOT NULL DEFAULT 1,
       user_id     INTEGER,

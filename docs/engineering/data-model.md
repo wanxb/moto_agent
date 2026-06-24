@@ -12,7 +12,8 @@
 -- 车辆（spec 001）
 CREATE TABLE vehicles (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
-    name        TEXT    NOT NULL,               -- 车名，如"小绿"
+    name        TEXT    NOT NULL,               -- 车名，如"Honda NS125LA"
+    alias       TEXT,                           -- 简称/别名，如"小拉"（spec 009，可空）
     is_default  INTEGER NOT NULL DEFAULT 0,     -- 1=默认车（同一时刻仅一辆）
     is_active   INTEGER NOT NULL DEFAULT 1,     -- 软删除预留
     user_id     INTEGER,                        -- Phase 3 多用户预留
@@ -158,6 +159,7 @@ CREATE INDEX idx_vehicles_default ON vehicles(is_default);
 > | [`0003_reminders.sql`](../../migrations/0003_reminders.sql) | 定时提醒：`reminders` 表（纯新增，可重入） | [spec 003](../specs/003-reminders/) |
 > | [`0004_soft_delete.sql`](../../migrations/0004_soft_delete.sql) | 软删除：`fuel_records` 加 `deleted_at`（前向一次性，ALTER 非幂等） | [spec 004](../specs/004-record-edit/) |
 > | [`0005_reminder_interval.sql`](../../migrations/0005_reminder_interval.sql) | 提醒续期：`reminders` 加 `interval_km`（前向一次性） | [spec 006](../specs/006-hardening/) |
+> | [`0006_vehicle_alias.sql`](../../migrations/0006_vehicle_alias.sql) | 车辆别名：`vehicles` 加 `alias` + 唯一索引（前向一次性） | [spec 009](../specs/009-vehicle-alias/) |
 
 ---
 

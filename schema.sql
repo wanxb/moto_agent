@@ -4,12 +4,14 @@
 CREATE TABLE IF NOT EXISTS vehicles (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
     name        TEXT    NOT NULL,
+    alias       TEXT,                            -- 简称/别名（spec 009，可空）
     is_default  INTEGER NOT NULL DEFAULT 0,       -- 1=默认车（同一时刻仅一辆为 1）
     is_active   INTEGER NOT NULL DEFAULT 1,       -- 软删除预留
     user_id     INTEGER,                          -- Phase 3 多用户预留
     created_at  TEXT    NOT NULL DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_vehicles_default ON vehicles(is_default);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_vehicles_alias ON vehicles(alias) WHERE alias IS NOT NULL;
 
 CREATE TABLE IF NOT EXISTS fuel_records (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,

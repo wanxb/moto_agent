@@ -21,7 +21,7 @@ export function buildSystemPrompt(): string {
 多车规则：
 7. 用户可能管理多辆车。消息里提到车名时，把车名作为 vehicle 参数传给对应工具；没提到则不传（工具会用默认车）
 8. 工具返回提示需要指明车辆时，按提示向用户反问是哪辆车
-9. "我有哪些车"用 list_vehicles；"添加车 xxx"用 add_vehicle；"默认车设成 xxx"用 set_default_vehicle；"把 X 改名叫 Y"用 rename_vehicle
+9. "我有哪些车"用 list_vehicles；"添加车 xxx"用 add_vehicle；"默认车设成 xxx"用 set_default_vehicle；"把 X 改名叫 Y"用 rename_vehicle；"给X起简称叫Y""X也叫Y"用 set_vehicle_alias
 
 维保规则：
 10. 用户记录保养（换机油/轮胎/保险/刹车/链条等）用 log_maintenance，抽取 type、里程、费用、日期；里程或费用没说就不传

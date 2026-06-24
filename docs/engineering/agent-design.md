@@ -54,6 +54,9 @@ agentLoop(messages):
 | `list_vehicles` | 无 | 列出全部车辆 | 🏍 车辆列表 |
 | `set_default_vehicle` | `name` | 切换默认车 | ✅ 已切换 |
 | `rename_vehicle` | `name, new_name` | 车辆改名（spec 005，历史记录自动显示新名） | ✅ 已改名 |
+| `set_vehicle_alias` | `name, alias` | 设/改/移除车辆简称（spec 009，如"Honda NS125LA"→"小拉"） | ✅ 已设简称 |
+
+> **车辆别名（spec 009）**：`resolveVehicle` 匹配 `name` 或 `alias`，对 LLM 透明。所有带 `vehicle` 参数的工具自动支持别名指代，无需逐一修改。
 | `log_maintenance` | `date, type`（+ `odometer`, `cost`, `note`, `vehicle`） | 记录保养（spec 002） | ✅ 已记录保养 |
 | `query_maintenance` | 无（+ `type`, `last_only`, `vehicle`） | 查询保养历史 / 某类型最近一次 | 🔧 保养记录 |
 | `set_reminder` | `type, mode`（+ `interval_km`/`trigger_odometer`/`trigger_date`, `vehicle`, `note`） | 设提醒（spec 003；间隔模式触发后自动续期 spec 006；同车同类型替换旧的 spec 007） | 🔔 已设置/🔁 已更新 |

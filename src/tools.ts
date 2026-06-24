@@ -2,7 +2,7 @@ import { ToolDefinition, Vehicle } from './types';
 import {
   insertFuelRecord, insertMileageRecord,
   getLastFuelRecord, getRecentFuelRecords, getFuelRecordsByDateRange,
-  insertVehicle, getVehicleByName, listVehicles, getDefaultVehicle, setDefaultVehicle, renameVehicle,
+  insertVehicle, getVehicleByName, getVehicleByNameOrAlias, listVehicles, getDefaultVehicle, setDefaultVehicle, renameVehicle, setVehicleAlias,
   insertMaintenanceRecord, getMaintenanceRecords, getLastMaintenanceByType,
   insertReminder, listRemindersByVehicle, cancelReminders, getLatestOdometer,
   updateFuelRecord, softDeleteFuelRecord,
@@ -122,10 +122,25 @@ export const TOOLS: ToolDefinition[] = [
       parameters: {
         type: 'object',
         properties: {
-          name:     { type: 'string', description: '车辆当前名称' },
+          name:     { type: 'string', description: '车辆当前名称或别名' },
           new_name: { type: 'string', description: '新名称' },
         },
         required: ['name', 'new_name'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'set_vehicle_alias',
+      description: '给车辆设置一个简称/别名（如"Honda NS125LA"的简称是"小拉"）。用户说"给X起个简称叫Y""X简称Y""X也叫Y"时调用。传空 alias 表示移除简称。',
+      parameters: {
+        type: 'object',
+        properties: {
+          name:  { type: 'string', description: '车辆全名或现有别名' },
+          alias: { type: 'string', description: '新简称（空字符串""表示移除简称）' },
+        },
+        required: ['name', 'alias'],
       },
     },
   },
@@ -261,6 +276,7 @@ export async function dispatchTool(
     case 'list_vehicles':       return listVehiclesTool(db);
     case 'set_default_vehicle': return setDefaultVehicleTool(input, db);
     case 'rename_vehicle':      return renameVehicleTool(input, db);
+    case 'set_vehicle_alias':   return setVehicleAliasTool(input, db);
     case 'log_maintenance':     return logMaintenance(input, db);
     case 'query_maintenance':   return queryMaintenance(input, db);
     case 'set_reminder':        return setReminder(input, db);
@@ -283,7 +299,7 @@ type VehicleResolution =
 
 async function resolveVehicle(db: D1Database, name?: string): Promise<VehicleResolution> {
   if (name) {
-    const v = await getVehicleByName(db, name);
+    const v = await getVehicleByNameOrAlias(db, name);   // spec 009：全名或别名均可匹配
     return v ? { status: 'resolved', vehicle: v } : { status: 'not_found', name };
   }
   const def = await getDefaultVehicle(db);
@@ -437,30 +453,55 @@ async function addVehicle(input: Record<string, unknown>, db: D1Database): Promi
 async function listVehiclesTool(db: D1Database): Promise<string> {
   const vehicles = await listVehicles(db);
   if (vehicles.length === 0) return '还没有车辆，可以说"添加一辆车 小绿"。';
-  const lines = vehicles.map(v => `• ${v.name}${v.is_default ? '（默认）' : ''}`);
+  const lines = vehicles.map(v => {
+    const label = v.alias ? `${v.name}（${v.alias}）` : v.name;
+    return `• ${label}${v.is_default ? '（默认）' : ''}`;
+  });
   return ['🏍 车辆列表', ...lines].join('\n');
 }
 
 async function setDefaultVehicleTool(input: Record<string, unknown>, db: D1Database): Promise<string> {
   const { name } = input as { name: string };
-  const v = await getVehicleByName(db, name);
+  const v = await getVehicleByNameOrAlias(db, name);   // spec 009：别名也可设默认
   if (!v) return `没有找到车辆「${name}」。`;
   await setDefaultVehicle(db, v.id);
-  return `✅ 已将默认车设为「${name}」。`;
+  return `✅ 已将默认车设为「${v.name}」。`;
 }
 
 async function renameVehicleTool(input: Record<string, unknown>, db: D1Database): Promise<string> {
   const { name, new_name } = input as { name: string; new_name: string };
   if (name === new_name) return `新旧名称相同，无需修改。`;
 
-  const v = await getVehicleByName(db, name);
+  const v = await getVehicleByNameOrAlias(db, name);   // spec 009：别名也可用于定位原车
   if (!v) return `没有找到车辆「${name}」。`;
 
-  const clash = await getVehicleByName(db, new_name);
+  const clash = await getVehicleByName(db, new_name);   // 重名只查全名（别名冲突由 set_vehicle_alias 管）
   if (clash) return `已存在车辆「${new_name}」，换个名字吧。`;
 
   await renameVehicle(db, v.id, new_name);
-  return `✅ 已将车辆「${name}」改名为「${new_name}」。`;
+  return `✅ 已将车辆「${v.name}」改名为「${new_name}」。`;
+}
+
+async function setVehicleAliasTool(input: Record<string, unknown>, db: D1Database): Promise<string> {
+  const { name, alias } = input as { name: string; alias: string };
+
+  const v = await getVehicleByNameOrAlias(db, name);
+  if (!v) return `没有找到车辆「${name}」。`;
+
+  // 移除简称
+  if (!alias || alias.trim() === '') {
+    await setVehicleAlias(db, v.id, null);
+    return `✅ 已移除「${v.name}」的简称。`;
+  }
+
+  // 查重：新别名不能与其他车（含其别名）冲突
+  const clash = await getVehicleByNameOrAlias(db, alias);
+  if (clash && clash.id !== v.id) {
+    return `已存在车辆或简称「${alias}」，换个简称吧。`;
+  }
+
+  await setVehicleAlias(db, v.id, alias.trim());
+  return `✅ 已将「${v.name}」的简称设为「${alias.trim()}」。`;
 }
 
 // ── Maintenance tools (spec 002) ──────────────────────────────────────────────
