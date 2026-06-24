@@ -52,6 +52,7 @@ export interface FuelRecord {
   fuel_type: string;
   note: string | null;
   vehicle_id: number | null;
+  deleted_at: string | null;
   created_at: string;
 }
 

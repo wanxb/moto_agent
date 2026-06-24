@@ -19,6 +19,7 @@ export async function initDB(db: D1Database): Promise<void> {
       fuel_type   TEXT    NOT NULL DEFAULT '95',
       note        TEXT,
       vehicle_id  INTEGER,
+      deleted_at  TEXT,
       created_at  TEXT    NOT NULL DEFAULT (datetime('now'))
     )`),
     db.prepare(`CREATE TABLE IF NOT EXISTS mileage_records (

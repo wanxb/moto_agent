@@ -58,6 +58,8 @@ agentLoop(messages):
 | `set_reminder` | `type, mode`（+ `interval_km`/`trigger_odometer`/`trigger_date`, `vehicle`, `note`） | 设提醒（spec 003） | 🔔 已设置提醒 |
 | `list_reminders` | 无（+ `vehicle`） | 列活跃提醒 | 🔔 提醒列表 |
 | `cancel_reminder` | `type`（+ `vehicle`） | 取消提醒 | ✅ 已取消 |
+| `update_last_fuel` | 无（+ 可改字段, `vehicle`） | 改最近一条加油记录（spec 004） | ✏️ 已修改 |
+| `delete_last_fuel` | 无（+ `vehicle`） | 软删最近一条加油记录（spec 004） | 🗑 已删除 |
 
 > **定时提醒（spec 003）**是首个非工具触发路径：除上述工具用于"设置/查看/取消"，到期推送由 Cron Triggers → `scheduled()` → `runScheduled()` 完成，不经 Agent Loop。见 [ADR-0006](adr/0006-cron-triggers-scheduled.md) 与 [架构 §2](architecture.md)。
 

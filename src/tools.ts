@@ -5,6 +5,7 @@ import {
   insertVehicle, getVehicleByName, listVehicles, getDefaultVehicle, setDefaultVehicle,
   insertMaintenanceRecord, getMaintenanceRecords, getLastMaintenanceByType,
   insertReminder, listRemindersByVehicle, cancelReminders, getLatestOdometer,
+  updateFuelRecord, softDeleteFuelRecord,
 } from './database';
 
 export const TOOLS: ToolDefinition[] = [
@@ -197,6 +198,40 @@ export const TOOLS: ToolDefinition[] = [
       },
     },
   },
+  {
+    type: 'function',
+    function: {
+      name: 'update_last_fuel',
+      description: '修改最近一条加油记录。用户说"上一条里程改成X""上次写错了，是9升"等纠错时调用，只传要改的字段。',
+      parameters: {
+        type: 'object',
+        properties: {
+          date:        { type: 'string', description: '改为该日期（ISO 8601）' },
+          odometer:    { type: 'number', description: '改为该里程（km）' },
+          liters:      { type: 'number', description: '改为该加油量（升）' },
+          price_total: { type: 'number', description: '改为该总价（元）' },
+          fuel_type:   { type: 'string', enum: ['92', '95', '98'], description: '改为该油品' },
+          note:        { type: 'string', description: '改为该备注' },
+          vehicle:     { type: 'string', description: '车辆名称（可选），未传则改默认车的最近记录。' },
+        },
+        required: [],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'delete_last_fuel',
+      description: '删除最近一条加油记录。用户说"删掉刚才那条""删除最近记录"时调用。',
+      parameters: {
+        type: 'object',
+        properties: {
+          vehicle: { type: 'string', description: '车辆名称（可选），未传则删默认车的最近记录。' },
+        },
+        required: [],
+      },
+    },
+  },
 ];
 
 export async function dispatchTool(
@@ -215,6 +250,8 @@ export async function dispatchTool(
     case 'set_reminder':        return setReminder(input, db);
     case 'list_reminders':      return listRemindersTool(input, db);
     case 'cancel_reminder':     return cancelReminderTool(input, db);
+    case 'update_last_fuel':    return updateLastFuel(input, db);
+    case 'delete_last_fuel':    return deleteLastFuel(input, db);
     default:                    return `未知工具：${name}`;
   }
 }
@@ -532,4 +569,58 @@ async function cancelReminderTool(input: Record<string, unknown>, db: D1Database
   const vehicleId = r.status === 'resolved' ? r.vehicle.id : undefined;
   const count = await cancelReminders(db, { type, vehicleId });
   return count > 0 ? `✅ 已取消「${type}」提醒（${count} 条）。` : `没有找到活跃的「${type}」提醒。`;
+}
+
+// ── Record edit / delete tools (spec 004) ─────────────────────────────────────
+
+async function updateLastFuel(input: Record<string, unknown>, db: D1Database): Promise<string> {
+  const { date, odometer, liters, price_total, fuel_type, note, vehicle } = input as {
+    date?: string; odometer?: number; liters?: number; price_total?: number;
+    fuel_type?: string; note?: string; vehicle?: string;
+  };
+
+  const r = await resolveVehicle(db, vehicle);
+  if (r.status === 'not_found') return `没有找到车辆「${r.name}」。`;
+  if (r.status === 'ambiguous') return ambiguousMsg(r.vehicles, '修改');
+
+  const vehicleId = r.status === 'resolved' ? r.vehicle.id : undefined;
+  const vehicleName = r.status === 'resolved' ? r.vehicle.name : undefined;
+
+  const last = await getLastFuelRecord(db, vehicleId);
+  if (!last) return '没有可修改的加油记录。';
+
+  const fields = { date, odometer, liters, price_total, fuel_type, note };
+  const changed = await updateFuelRecord(db, last.id, fields);
+  if (changed === 0) return '请说明要修改什么（里程、升数、价格、油品或日期）。';
+
+  // 合并出新值用于回显
+  const m = { ...last, ...Object.fromEntries(Object.entries(fields).filter(([, v]) => v !== undefined)) } as typeof last;
+  const pricePerL = (m.price_total / m.liters).toFixed(2);
+  return [
+    `✏️ 已修改最近一条加油记录${vehicleName ? `（${vehicleName}）` : ''}`,
+    `📍 里程：${m.odometer.toLocaleString('zh')} km`,
+    `⛽ ${m.liters} L × ¥${pricePerL}/L = ¥${m.price_total}`,
+    `📅 ${m.date} · ${m.fuel_type}号`,
+  ].join('\n');
+}
+
+async function deleteLastFuel(input: Record<string, unknown>, db: D1Database): Promise<string> {
+  const { vehicle } = input as { vehicle?: string };
+
+  const r = await resolveVehicle(db, vehicle);
+  if (r.status === 'not_found') return `没有找到车辆「${r.name}」。`;
+  if (r.status === 'ambiguous') return ambiguousMsg(r.vehicles, '删除');
+
+  const vehicleId = r.status === 'resolved' ? r.vehicle.id : undefined;
+  const vehicleName = r.status === 'resolved' ? r.vehicle.name : undefined;
+
+  const last = await getLastFuelRecord(db, vehicleId);
+  if (!last) return '没有可删除的加油记录。';
+
+  await softDeleteFuelRecord(db, last.id, new Date().toISOString());
+  return [
+    `🗑 已删除最近一条加油记录${vehicleName ? `（${vehicleName}）` : ''}`,
+    `${last.date} · ${last.odometer.toLocaleString('zh')} km · ${last.liters} L · ¥${last.price_total}`,
+    '（如需恢复请联系管理员）',
+  ].join('\n');
 }

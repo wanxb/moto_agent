@@ -20,6 +20,7 @@ CREATE TABLE IF NOT EXISTS fuel_records (
     fuel_type   TEXT    NOT NULL DEFAULT '95',
     note        TEXT,
     vehicle_id  INTEGER,                          -- 所属车辆（spec 001）
+    deleted_at  TEXT,                             -- 软删除时刻（spec 004，NULL=活跃）
     created_at  TEXT    NOT NULL DEFAULT (datetime('now'))
 );
 
@@ -67,3 +68,4 @@ CREATE INDEX IF NOT EXISTS idx_maint_vehicle   ON maintenance_records(vehicle_id
 CREATE INDEX IF NOT EXISTS idx_maint_type      ON maintenance_records(type);
 CREATE INDEX IF NOT EXISTS idx_reminders_status  ON reminders(status);
 CREATE INDEX IF NOT EXISTS idx_reminders_vehicle ON reminders(vehicle_id);
+CREATE INDEX IF NOT EXISTS idx_fuel_deleted      ON fuel_records(deleted_at);

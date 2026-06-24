@@ -28,7 +28,11 @@ function buildSystemPrompt(): string {
 
 提醒规则：
 11. 设提醒用 set_reminder：里程类（"机油每3000公里"→mode=mileage,interval_km=3000；"机油到13000提醒"→mode=mileage,trigger_odometer=13000）；日期类（"保险2027-01-05到期"→mode=date,trigger_date=2027-01-05）
-12. "我设了哪些提醒"用 list_reminders；"取消X提醒"用 cancel_reminder（传 type=X）`;
+12. "我设了哪些提醒"用 list_reminders；"取消X提醒"用 cancel_reminder（传 type=X）
+
+纠错规则：
+13. 用户要改最近一条加油记录（"上一条里程改成X""上次写错了，是9升"）用 update_last_fuel，只传要改的字段
+14. 用户要删最近一条加油记录（"删掉刚才那条""删除最近记录"）用 delete_last_fuel`;
 }
 
 export async function agentLoop(messages: Message[], env: Env): Promise<string> {

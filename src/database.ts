@@ -23,18 +23,19 @@ export async function insertMileageRecord(db: D1Database, data: {
 }
 
 // vehicleId 省略 → 不按车过滤（兼容单车/历史数据）；提供 → 仅该车记录。
+// 所有读路径都过滤 deleted_at IS NULL（软删除，spec 004）。
 export async function getLastFuelRecord(db: D1Database, vehicleId?: number): Promise<FuelRecord | null> {
   if (vehicleId === undefined) {
-    return db.prepare('SELECT * FROM fuel_records ORDER BY odometer DESC LIMIT 1').first<FuelRecord>();
+    return db.prepare('SELECT * FROM fuel_records WHERE deleted_at IS NULL ORDER BY odometer DESC LIMIT 1').first<FuelRecord>();
   }
-  return db.prepare('SELECT * FROM fuel_records WHERE vehicle_id = ? ORDER BY odometer DESC LIMIT 1')
+  return db.prepare('SELECT * FROM fuel_records WHERE vehicle_id = ? AND deleted_at IS NULL ORDER BY odometer DESC LIMIT 1')
     .bind(vehicleId).first<FuelRecord>();
 }
 
 export async function getRecentFuelRecords(db: D1Database, limit: number, vehicleId?: number): Promise<FuelRecord[]> {
   const stmt = vehicleId === undefined
-    ? db.prepare('SELECT * FROM fuel_records ORDER BY odometer DESC LIMIT ?').bind(limit)
-    : db.prepare('SELECT * FROM fuel_records WHERE vehicle_id = ? ORDER BY odometer DESC LIMIT ?').bind(vehicleId, limit);
+    ? db.prepare('SELECT * FROM fuel_records WHERE deleted_at IS NULL ORDER BY odometer DESC LIMIT ?').bind(limit)
+    : db.prepare('SELECT * FROM fuel_records WHERE vehicle_id = ? AND deleted_at IS NULL ORDER BY odometer DESC LIMIT ?').bind(vehicleId, limit);
   const { results } = await stmt.all<FuelRecord>();
   return results;
 }
@@ -43,12 +44,33 @@ export async function getFuelRecordsByDateRange(
   db: D1Database, startDate: string, endDate: string, vehicleId?: number
 ): Promise<FuelRecord[]> {
   const stmt = vehicleId === undefined
-    ? db.prepare('SELECT * FROM fuel_records WHERE date >= ? AND date <= ? ORDER BY odometer ASC')
+    ? db.prepare('SELECT * FROM fuel_records WHERE date >= ? AND date <= ? AND deleted_at IS NULL ORDER BY odometer ASC')
         .bind(startDate, endDate)
-    : db.prepare('SELECT * FROM fuel_records WHERE date >= ? AND date <= ? AND vehicle_id = ? ORDER BY odometer ASC')
+    : db.prepare('SELECT * FROM fuel_records WHERE date >= ? AND date <= ? AND vehicle_id = ? AND deleted_at IS NULL ORDER BY odometer ASC')
         .bind(startDate, endDate, vehicleId);
   const { results } = await stmt.all<FuelRecord>();
   return results;
+}
+
+// 更新最近记录用：列白名单 + 参数化，只改提供的字段。
+const FUEL_EDITABLE_COLUMNS = ['date', 'odometer', 'liters', 'price_total', 'fuel_type', 'note'] as const;
+
+export async function updateFuelRecord(
+  db: D1Database, id: number, fields: Record<string, unknown>
+): Promise<number> {
+  const sets: string[] = [];
+  const binds: unknown[] = [];
+  for (const col of FUEL_EDITABLE_COLUMNS) {
+    if (fields[col] !== undefined) { sets.push(`${col} = ?`); binds.push(fields[col]); }
+  }
+  if (sets.length === 0) return 0;
+  binds.push(id);
+  const res = await db.prepare(`UPDATE fuel_records SET ${sets.join(', ')} WHERE id = ?`).bind(...binds).run();
+  return res.meta.changes ?? 0;
+}
+
+export async function softDeleteFuelRecord(db: D1Database, id: number, deletedAt: string): Promise<void> {
+  await db.prepare('UPDATE fuel_records SET deleted_at = ? WHERE id = ?').bind(deletedAt, id).run();
 }
 
 // ── Vehicles (spec 001) ───────────────────────────────────────────────────────
@@ -126,13 +148,14 @@ export async function getLastMaintenanceByType(
 }
 
 // 跨 fuel + mileage 记录取该车（或全部）最新里程，供里程提醒判定。
+// fuel 子查询排除软删除记录（spec 004），避免误删的高里程仍触发提醒。
 export async function getLatestOdometer(db: D1Database, vehicleId?: number): Promise<number | null> {
   const row = vehicleId === undefined
     ? await db.prepare(
-        'SELECT MAX(o) AS m FROM (SELECT odometer o FROM fuel_records UNION ALL SELECT odometer o FROM mileage_records)'
+        'SELECT MAX(o) AS m FROM (SELECT odometer o FROM fuel_records WHERE deleted_at IS NULL UNION ALL SELECT odometer o FROM mileage_records)'
       ).first<{ m: number | null }>()
     : await db.prepare(
-        'SELECT MAX(o) AS m FROM (SELECT odometer o FROM fuel_records WHERE vehicle_id = ?1 UNION ALL SELECT odometer o FROM mileage_records WHERE vehicle_id = ?1)'
+        'SELECT MAX(o) AS m FROM (SELECT odometer o FROM fuel_records WHERE vehicle_id = ?1 AND deleted_at IS NULL UNION ALL SELECT odometer o FROM mileage_records WHERE vehicle_id = ?1)'
       ).bind(vehicleId).first<{ m: number | null }>();
   return row?.m ?? null;
 }

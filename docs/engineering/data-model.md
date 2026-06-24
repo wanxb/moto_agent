@@ -29,6 +29,7 @@ CREATE TABLE fuel_records (
     fuel_type   TEXT    NOT NULL DEFAULT '95',  -- 油品: 92/95/98
     note        TEXT,
     vehicle_id  INTEGER,                    -- 所属车辆（spec 001，存量数据可空）
+    deleted_at  TEXT,                       -- 软删除时刻（spec 004，NULL=活跃）
     created_at  TEXT    NOT NULL DEFAULT (datetime('now'))
 );
 
@@ -154,6 +155,7 @@ CREATE INDEX idx_vehicles_default ON vehicles(is_default);
 > | [`0001_multi_vehicle.sql`](../../migrations/0001_multi_vehicle.sql) | 多车管理：`vehicles` 表 + 记录表 `vehicle_id` + 存量回填默认车 | [spec 001](../specs/001-multi-vehicle/) |
 > | [`0002_maintenance.sql`](../../migrations/0002_maintenance.sql) | 维修保养：`maintenance_records` 表（纯新增，可重入） | [spec 002](../specs/002-maintenance/) |
 > | [`0003_reminders.sql`](../../migrations/0003_reminders.sql) | 定时提醒：`reminders` 表（纯新增，可重入） | [spec 003](../specs/003-reminders/) |
+> | [`0004_soft_delete.sql`](../../migrations/0004_soft_delete.sql) | 软删除：`fuel_records` 加 `deleted_at`（前向一次性，ALTER 非幂等） | [spec 004](../specs/004-record-edit/) |
 
 ---
 
@@ -163,7 +165,7 @@ CREATE INDEX idx_vehicles_default ON vehicles(is_default);
 |------|------|------|------|
 | 时区 | `created_at` 用 `datetime('now')`（UTC） | 跨时区/边界日期可能错位 | Phase 2 统一时区策略 |
 | 加满标志 | 无 | 油耗精度依赖用户加满 | 可选加 `is_full` 列（只增） |
-| 修改/删除 | 无纠错功能 | 记错只能忍 | Phase 2 P2（[backlog](../specs/backlog.md)） |
+| 修改/删除 | ✅ 已支持（最近一条加油记录，软删除） | — | 已实现，[spec 004](../specs/004-record-edit/) |
 
 ---
 
@@ -174,6 +176,7 @@ CREATE INDEX idx_vehicles_default ON vehicles(is_default);
 | **Phase 2 多车** ✅ | 新增 `vehicles` 表；`fuel_records`/`mileage_records` 加 `vehicle_id` | 已实现，见 [迁移 0001](../../migrations/0001_multi_vehicle.sql) · [spec 001](../specs/001-multi-vehicle/design.md) |
 | **Phase 2 维保** ✅ | 新增 `maintenance_records` 表（绑定 `vehicle_id`） | 已实现，见 [迁移 0002](../../migrations/0002_maintenance.sql) · [spec 002](../specs/002-maintenance/) |
 | **Phase 2 提醒** ✅ | 新增 `reminders` 表（绑定 `vehicle_id`，`chat_id` 预留多用户） | 已实现，见 [迁移 0003](../../migrations/0003_reminders.sql) · [spec 003](../specs/003-reminders/) |
+| **Phase 2 纠错** ✅ | `fuel_records` 加 `deleted_at`（软删除，读路径过滤） | 已实现，见 [迁移 0004](../../migrations/0004_soft_delete.sql) · [spec 004](../specs/004-record-edit/) |
 | **Phase 3 多用户** | 新增 `users` 表（存 `chat_id`）；各表加 `user_id` | 数据隔离前提，需先做 [security](security.md) 设计 |
 | **Phase 4** | 时序数据（OBD/GPS），可能引入独立存储 | 视数据量 |
 
