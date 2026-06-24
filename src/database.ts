@@ -1,4 +1,5 @@
 import { FuelRecord, Vehicle, MaintenanceRecord, ReminderWithVehicle } from './types';
+import { FUEL_EDITABLE_COLUMNS } from './config';
 
 // ── Fuel / mileage records ────────────────────────────────────────────────────
 
@@ -52,8 +53,7 @@ export async function getFuelRecordsByDateRange(
   return results;
 }
 
-// 更新最近记录用：列白名单 + 参数化，只改提供的字段。
-const FUEL_EDITABLE_COLUMNS = ['date', 'odometer', 'liters', 'price_total', 'fuel_type', 'note'] as const;
+// 更新最近记录用：列白名单 + 参数化，只改提供的字段。白名单来自 config.ts。
 
 export async function updateFuelRecord(
   db: D1Database, id: number, fields: Record<string, unknown>

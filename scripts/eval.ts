@@ -16,7 +16,7 @@
 
 import { readFileSync, existsSync } from 'fs';
 import { join } from 'path';
-import { callLLM } from '../src/llm';
+import { callLLM } from '../src/llm-transport';
 import { TOOLS } from '../src/tools';
 import { buildSystemPrompt } from '../src/agent';
 import type { Message } from '../src/types';

@@ -1,10 +1,9 @@
 import { Message, Env, type ToolDefinition } from './types';
+import { MAX_ROUNDS } from './config';
 import { TOOLS, registry } from './tools';
-import { callLLM } from './llm';
+import { callLLM } from './llm-transport';
 import type { ILLMProvider } from './ports';
 import type { ToolRegistry } from './tools/interface';
-
-const MAX_ROUNDS = 4;
 
 export function buildSystemPrompt(): string {
   const today = new Date().toISOString().split('T')[0];

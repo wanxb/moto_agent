@@ -1,6 +1,6 @@
 // 主备双模型组合：首优先尝试 primary，3 次重试后切 secondary（组合模式）。
 
-import { isRetryable, sleep } from '../llm';
+import { isRetryable, sleep } from '../llm-transport';
 import type { ILLMProvider } from '../ports';
 import type { Message, LLMResponse, ToolDefinition } from '../types';
 

@@ -1,9 +1,9 @@
 import { Env, Message } from './types';
 import { agentLoop } from './agent';
 import { toPlainText } from './format';
+import { SESSION_TTL, MAX_SESSION_MESSAGES } from './config';
 
-const SESSION_TTL = 3600;
-export const MAX_SESSION_MESSAGES = 10;
+export { MAX_SESSION_MESSAGES } from './config';
 
 // 按「完整回合」截断会话历史：保留尽量多但 ≤ maxMessages 的消息，且**从 user 消息开始**。
 // 这样不会把 assistant 的 tool_calls 与其 tool 结果切散（否则下次请求会出现悬空配对、被模型 API 拒绝）。

@@ -1,5 +1,7 @@
 // KV 滑动窗口限流（复用 SESSION_KV namespace，零额外资源）。
 
+import { RATE_LIMIT_PER_USER, RATE_LIMIT_GLOBAL, RATE_LIMIT_AUTH } from '../config';
+
 export interface RateLimitResult {
   allowed: boolean;
   remaining: number;
@@ -13,9 +15,9 @@ export interface RateLimitRule {
 
 // 预定义规则（按业务语义命名，不按具体数字）
 export const RULES: Record<string, RateLimitRule> = {
-  'chat:per-user':   { windowSeconds: 60, maxRequests: 10 },    // 对话
-  'chat:global':     { windowSeconds: 60, maxRequests: 100 },   // 全局兜底
-  'auth:per-ip':     { windowSeconds: 300, maxRequests: 5 },    // 注册/登录防暴力
+  'chat:per-user':   { windowSeconds: 60, maxRequests: RATE_LIMIT_PER_USER },
+  'chat:global':     { windowSeconds: 60, maxRequests: RATE_LIMIT_GLOBAL },
+  'auth:per-ip':     { windowSeconds: 300, maxRequests: RATE_LIMIT_AUTH },
 };
 
 interface Counter { count: number; resetAt: number }

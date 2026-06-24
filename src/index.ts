@@ -5,8 +5,7 @@ import { runScheduled } from './scheduled';
 import { transcribe } from './stt';
 import { bootstrap } from './bootstrap';
 import { RestAdapter } from './gateway/adapters/rest';
-
-const MAX_VOICE_SECONDS = 60;
+import { MAX_VOICE_SECONDS } from './config';
 
 const WELCOME = `👋 摩托车油耗管理助手
 

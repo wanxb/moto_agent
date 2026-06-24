@@ -1,6 +1,6 @@
 // DeepSeek V3 LLM 提供商（OpenAI 兼容格式）。
 
-import { callDeepSeek } from '../llm';
+import { callDeepSeek } from '../llm-transport';
 import type { ILLMProvider } from '../ports';
 import type { Message, LLMResponse, ToolDefinition } from '../types';
 

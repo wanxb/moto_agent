@@ -1,10 +1,8 @@
 import { Message, ToolCall, ToolDefinition, LLMResponse, ResolvedToolCall } from './types';
+import { DEEPSEEK_MODEL, ANTHROPIC_MODEL, MAX_TOKENS } from './config';
 
 const DEEPSEEK_URL = 'https://api.deepseek.com/v1/chat/completions';
 const ANTHROPIC_URL = 'https://api.anthropic.com/v1/messages';
-const ANTHROPIC_MODEL = 'claude-sonnet-4-6';
-const DEEPSEEK_MODEL = 'deepseek-chat';
-const MAX_TOKENS = 2048;
 
 export class LLMError extends Error {
   constructor(public status: number, body: string) { super(`HTTP ${status}: ${body}`); }

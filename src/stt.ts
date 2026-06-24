@@ -1,8 +1,7 @@
 import { Env } from './types';
+import { WHISPER_MODEL } from './config';
 
 // 语音转文字（spec 008）。用 Cloudflare Workers AI 的 Whisper（ADR-0007）。
-// 模型常量集中此处，便于按需切换到 OpenAI/Groq（接口不变）。
-const WHISPER_MODEL = '@cf/openai/whisper-large-v3-turbo';
 
 export async function transcribe(bytes: Uint8Array, env: Env): Promise<string> {
   const audio = toBase64(bytes);   // whisper-large-v3-turbo 接收 base64 音频

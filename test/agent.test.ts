@@ -5,8 +5,8 @@ import { initDB, clearDB, makeEnv } from './utils';
 import type { Message, LLMResponse } from '../src/types';
 
 // Mock the entire llm module so agent tests don't make real network calls
-vi.mock('../src/llm', () => ({ callLLM: vi.fn() }));
-import { callLLM } from '../src/llm';
+vi.mock('../src/llm-transport', () => ({ callLLM: vi.fn() }));
+import { callLLM } from '../src/llm-transport';
 const mockLLM = callLLM as ReturnType<typeof vi.fn>;
 
 beforeAll(async () => { await initDB(env.DB); });

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { callLLM } from '../src/llm';
+import { callLLM } from '../src/llm-transport';
 import type { Message, ToolDefinition } from '../src/types';
 
 const DS_KEY  = 'test-ds-key';

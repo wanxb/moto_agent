@@ -1,6 +1,6 @@
 // Anthropic Claude LLM 提供商（备用）。
 
-import { callAnthropic } from '../llm';
+import { callAnthropic } from '../llm-transport';
 import type { ILLMProvider } from '../ports';
 import type { Message, LLMResponse, ToolDefinition } from '../types';
 

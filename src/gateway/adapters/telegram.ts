@@ -2,8 +2,7 @@
 
 import type { Context } from 'grammy';
 import type { ChannelAdapter, IMessenger, ITTSProvider } from '../../ports';
-
-const MAX_VOICE_SECONDS = 60;
+import { MAX_VOICE_SECONDS } from '../../config';
 
 export class TelegramAdapter implements ChannelAdapter {
   constructor(

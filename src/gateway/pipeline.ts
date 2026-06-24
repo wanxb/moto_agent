@@ -5,10 +5,7 @@ import type { Message } from '../types';
 import { toPlainText } from '../format';
 import { trimHistory } from '../session';
 import { checkRateLimit, RULES, type RateLimitRule } from './rate-limiter';
-
-// session 配置（当前用 KV TTL 1h + 最多 10 条）
-const SESSION_TTL = 3600;
-const MAX_SESSION_MESSAGES = 10;
+import { SESSION_TTL, MAX_SESSION_MESSAGES } from '../config';
 
 // 轻量 agent 跑手签名：接收消息历史 + DB → 返回最终回复文本
 // R2d 之后 agentLoop 签名变为 (messages, llm, registry, db)，这里用统一函数引用
