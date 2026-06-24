@@ -3,6 +3,8 @@ import { Env } from './types';
 import { runAgent } from './session';
 import { runScheduled } from './scheduled';
 import { transcribe } from './stt';
+import { bootstrap } from './bootstrap';
+import { RestAdapter } from './gateway/adapters/rest';
 
 const MAX_VOICE_SECONDS = 60;
 
@@ -92,6 +94,27 @@ function createBot(env: Env): Bot {
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     try {
+      const url = new URL(request.url);
+
+      // ── REST API（Phase 3 App/Web/Dashboard）─────────────────────────────────
+      if (url.pathname === '/api/v1/chat' && request.method === 'POST') {
+        try {
+          const body = await request.json() as { text?: string; userId?: string };
+          if (!body.text) {
+            return new Response(JSON.stringify({ error: '缺少 text' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
+          }
+          const app = bootstrap(env);
+          const adapter = new RestAdapter(app.allowedChatId);
+          const raw = { headers: request.headers, body };
+          const reply = await app.run(adapter, raw);
+          return new Response(JSON.stringify({ reply }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+        } catch (e) {
+          console.error('[api] chat error:', e instanceof Error ? e.message : String(e));
+          return new Response(JSON.stringify({ error: '处理失败' }), { status: 500, headers: { 'Content-Type': 'application/json' } });
+        }
+      }
+
+      // ── Telegram webhook ──────────────────────────────────────────────────
       // Verify Telegram webhook secret
       if (env.TELEGRAM_WEBHOOK_SECRET) {
         const token = request.headers.get('X-Telegram-Bot-Api-Secret-Token');
