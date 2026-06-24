@@ -17,7 +17,7 @@ import { SetReminderTool, ListRemindersTool, CancelReminderTool } from './remind
 
 // ── 注册所有工具 ─────────────────────────────────────────────────────────────
 
-const registry = new ToolRegistry()
+export const registry = new ToolRegistry()
   .register(new LogFuelTool())
   .register(new LogMileageTool())
   .register(new QueryStatsTool())

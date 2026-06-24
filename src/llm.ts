@@ -6,15 +6,15 @@ const ANTHROPIC_MODEL = 'claude-sonnet-4-6';
 const DEEPSEEK_MODEL = 'deepseek-chat';
 const MAX_TOKENS = 2048;
 
-class LLMError extends Error {
+export class LLMError extends Error {
   constructor(public status: number, body: string) { super(`HTTP ${status}: ${body}`); }
 }
 
-function sleep(ms: number): Promise<void> {
+export function sleep(ms: number): Promise<void> {
   return new Promise(r => setTimeout(r, ms));
 }
 
-function isRetryable(e: unknown): boolean {
+export function isRetryable(e: unknown): boolean {
   return e instanceof LLMError && (e.status === 429 || e.status >= 500);
 }
 
@@ -39,7 +39,7 @@ export async function callLLM(
 
 // ── DeepSeek (OpenAI-compatible) ─────────────────────────────────────────────
 
-async function callDeepSeek(
+export async function callDeepSeek(
   messages: Message[], tools: ToolDefinition[], apiKey: string
 ): Promise<LLMResponse> {
   const body: Record<string, unknown> = {
@@ -80,7 +80,7 @@ function resolveOAIToolCalls(calls: ToolCall[]): ResolvedToolCall[] {
 
 // ── Anthropic ────────────────────────────────────────────────────────────────
 
-async function callAnthropic(
+export async function callAnthropic(
   messages: Message[], tools: ToolDefinition[], apiKey: string
 ): Promise<LLMResponse> {
   const { system, anthropicMessages } = toAnthropicMessages(messages);
