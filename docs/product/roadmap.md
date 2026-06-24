@@ -37,6 +37,7 @@
 | **P2** | 记录纠错/删除 | 中（数据质量） | 低 | 无 | [`../specs/004-record-edit/`](../specs/004-record-edit/) ✔️ 已实现（待部署） |
 | **P2** | 语音输入 | 中（便利性） | 中（Workers AI Whisper，无需转码） | 无 | [`../specs/008-voice-input/`](../specs/008-voice-input/) ✔️ 已实现（待部署） |
 | **P3** | 数据导出（CSV） | 低 | 低 | 无 | [`../specs/backlog.md`](../specs/backlog.md) |
+| — | 国际化（中英双语） | 中（多客户端前提） | 中 | 无 | [ADR-0008](../engineering/adr/0008-i18n-bilingual.md) · [spec 010](../specs/010-i18n/) 📋 Planned |
 
 > **为什么多车优先**：它是 schema 演进的第一步（引入 `vehicles` 表 + 外键），维保、提醒、未来多用户都要挂在车辆维度上。先把这个数据基座打好，后续功能成本更低。详见 [ADR-0005 演进](../engineering/data-model.md)。
 

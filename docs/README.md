@@ -88,5 +88,7 @@ moto_agent/
 | `specs/006-hardening` | ✔️ 已实现 | 质量加固：指标埋点 + 提醒自动续期 + LLM 评测集（`npm run eval`） |
 | `specs/007-reminder-replace-and-context` | ✔️ 已实现 | 修复：set_reminder 同类替换不叠加 + 会话历史按回合截断 |
 | `specs/008-voice-input` | ✔️ 已实现 | 语音输入：Telegram 语音→Workers AI Whisper→现有链路，回显识别文本 |
-| `specs/backlog.md` | 🟡 概览 | 其余功能（语音/导出/Dashboard）待详写 |
+| `specs/009-vehicle-alias` | ✔️ 已实现 | 车辆别名/简称（如"Honda NS125LA"→"小拉"），待部署 |
+| `specs/010-i18n` | 📋 Planned | 国际化中英双语，KV 存语言偏好，待实施 · [ADR-0008](engineering/adr/0008-i18n-bilingual.md) |
+| `specs/backlog.md` | 🟡 概览 | 其余功能（导出/Dashboard）待详写 |
 | `product/*` · `process/*` | ✅ 初版 | — |
