@@ -62,9 +62,16 @@ async function fetchApi(path) {
   const sep = path.includes('?') ? '&' : '?';
   const q = v ? ('&vehicle=' + encodeURIComponent(v)) : '';
   const r = await fetch(path + sep + 'token=' + TOKEN + q);
-  if (!r.ok) throw new Error(r.status + ' ' + (await r.text()));
+  if (!r.ok) {
+    const txt = await r.text();
+    error.textContent = path + ': ' + r.status + ' ' + txt;
+    throw new Error(txt);
+  }
   return r.json();
 }
+
+function safeArr(x) { return Array.isArray(x) ? x : []; }
+function safeRecords(x) { return (x && Array.isArray(x.records)) ? x.records : []; }
 
 async function load() {
   error.textContent = ''; loading.style.display = 'block';
@@ -77,7 +84,8 @@ async function load() {
     ]);
 
     // vehicle dropdown
-    vehicle.innerHTML = '<option value="">'+t('all')+'</option>' + vehiclesData.vehicles.map(v => ('<option>'+v.name+(v.alias?' ('+v.alias+')':'')+'</option>')).join('');
+    const vehs = safeArr(vehiclesData.vehicles);
+    vehicle.innerHTML = '<option value="">'+t('all')+'</option>' + vehs.map(v => ('<option>'+v.name+(v.alias?' ('+v.alias+')':'')+'</option>')).join('');
     vehicle.value = new URLSearchParams(window.location.search).get('vehicle') || '';
 
     // cards
@@ -87,10 +95,15 @@ async function load() {
       cards.innerHTML += '<div class="card"><div class="label">'+t(k)+'</div><div class="value">'+val+'</div></div>';
     });
 
-    // chart
-    const ctx = document.getElementById('chart').getContext('2d');
+    const recs = safeRecords(statsData);
+    const data = recs.filter(p => p && p.consumption != null);
+
+    // chart — 无有效数据时清空画布
+    const canvas = document.getElementById('chart');
+    const ctx = canvas.getContext('2d');
     if (chart) chart.destroy();
-    const data = statsData.records.filter(p => p.consumption != null);
+    if (!data.length) { canvas.style.display = 'none'; }
+    else { canvas.style.display = 'block';
     chart = new Chart(ctx, {
       type: 'line',
       data: {
@@ -112,9 +125,12 @@ async function load() {
       }
     });
 
+    } // end chart else
+
     // reminders
-    reminders.innerHTML = '<div class="label">🔔 '+t('reminder')+' ('+remindersData.reminders.length+')</div>';
-    reminders.innerHTML += remindersData.reminders.length ? '<ul>'+remindersData.reminders.map(r=>'<li>'+r.type+' · '+r.trigger+(r.vehicle?' ('+r.vehicle+')':'')+'</li>').join('')+'</ul>' : '<p style="color:var(--muted);margin-top:8px">'+t('noData')+'</p>';
+    const rems = safeArr(remindersData.reminders);
+    reminders.innerHTML = '<div class="label">🔔 '+t('reminder')+' ('+rems.length+')</div>';
+    reminders.innerHTML += rems.length ? '<ul>'+rems.map(r=>'<li>'+r.type+' · '+r.trigger+(r.vehicle?' ('+r.vehicle+')':'')+'</li>').join('')+'</ul>' : '<p style="color:var(--muted);margin-top:8px">'+t('noData')+'</p>';
 
     loading.style.display = 'none';
   } catch(e) {
