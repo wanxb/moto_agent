@@ -1,6 +1,7 @@
 // Dashboard 前端 HTML（ADR-0009）。单页 + Chart.js CDN + 三个 API 调用。
 
-export function dashboardPage(tokenParam: string): string {
+export function dashboardPage(tokenHint?: string): string {
+  const tokenParam = tokenHint || 'YOUR_TOKEN';
   return `<!DOCTYPE html>
 <html lang="zh">
 <head>

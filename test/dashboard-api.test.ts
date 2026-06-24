@@ -3,7 +3,7 @@ import { SELF, env } from 'cloudflare:test';
 
 // Tests use SELF.fetch to make real HTTP requests through the Miniflare worker.
 
-const TOKEN = 'test-db-token';
+const TOKEN = '999999'; // = ALLOWED_CHAT_ID（Dashboard token 复用白名单）
 function apiUrl(path: string) { return `http://localhost${path}&token=${TOKEN}`; }
 
 beforeAll(async () => {

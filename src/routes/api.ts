@@ -7,9 +7,9 @@ import type { FuelRecord } from '../types';
 
 // ── Token 鉴权 ───────────────────────────────────────────────────────────────
 
-function tokenAuth(request: Request, env: { DASHBOARD_TOKEN?: string }): Response | null {
-  const expected = env.DASHBOARD_TOKEN;
-  if (!expected) return new Response(JSON.stringify({ error: 'DASHBOARD_TOKEN 未配置' }), { status: 500, headers: { 'Content-Type': 'application/json' } });
+function tokenAuth(request: Request, env: { ALLOWED_CHAT_ID?: string }): Response | null {
+  const expected = env.ALLOWED_CHAT_ID;
+  if (!expected) return null;  // 未设 ALLOWED_CHAT_ID → Dashboard 开放（单用户阶段安全等效）
   const url = new URL(request.url);
   const token = url.searchParams.get('token') ?? request.headers.get('Authorization')?.replace(/^Bearer\s+/i, '');
   if (token !== expected) return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: { 'Content-Type': 'application/json' } });
@@ -18,7 +18,7 @@ function tokenAuth(request: Request, env: { DASHBOARD_TOKEN?: string }): Respons
 
 // ── 入口 ──────────────────────────────────────────────────────────────────────
 
-export async function handleApiRequest(request: Request, env: { DB: D1Database; DASHBOARD_TOKEN?: string }): Promise<Response> {
+export async function handleApiRequest(request: Request, env: { DB: D1Database; ALLOWED_CHAT_ID?: string }): Promise<Response> {
   const authErr = tokenAuth(request, env);
   if (authErr) return authErr;
 

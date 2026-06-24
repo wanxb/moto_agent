@@ -8,7 +8,6 @@ export interface Env {
   DEEPSEEK_API_KEY: string;
   ANTHROPIC_API_KEY: string;
   ALLOWED_CHAT_ID: string;
-  DASHBOARD_TOKEN?: string;
 }
 
 // OpenAI-compatible message format (used internally and for DeepSeek)

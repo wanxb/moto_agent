@@ -117,7 +117,8 @@ export default {
 
       // ── Dashboard HTML ────────────────────────────────────────────────────
       if (url.pathname === '/dashboard') {
-        const token = url.searchParams.get('token') || 'YOUR_TOKEN';
+        // Token 复用 ALLOWED_CHAT_ID（白名单），无需单独配置
+        const token = url.searchParams.get('token') || env.ALLOWED_CHAT_ID || '';
         return new Response(dashboardPage(token), { status: 200, headers: { 'Content-Type': 'text/html; charset=utf-8' } });
       }
 
