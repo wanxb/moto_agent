@@ -3,12 +3,15 @@
  * 对 test/eval/cases.json 逐条用真实模型校验「自然语言 → 正确工具 + 关键参数」。
  *
  * 用法：
- *   npm run eval                # 用 DEEPSEEK_API_KEY 跑全部用例
+ *   npm run eval                # 默认每条跑 3 次（多采样区分系统性失败 vs 随机抖动）
+ *   EVAL_RUNS=5 npm run eval    # 自定义每条采样次数
  * 需要环境变量（从 .dev.vars 或 shell 取）：
  *   DEEPSEEK_API_KEY            # 主模型
  *   ANTHROPIC_API_KEY          # 可选，DeepSeek 不可用时 fallback
  *
- * 退出码：通过率 < THRESHOLD 时为 1（便于将来手动当门禁）。
+ * 真实模型有随机性：单次跑会把噪声当失败。多采样后按「每条命中率」判断：
+ *   ✅ 全中 · ⚠️ 部分中（抖动） · ❌ 全错（系统性，需修）
+ * 退出码：总命中率 < THRESHOLD 时为 1。
  */
 
 import { readFileSync, existsSync } from 'fs';
@@ -54,41 +57,52 @@ async function main(): Promise<void> {
 
   const cases: Case[] = JSON.parse(readFileSync(join(process.cwd(), 'test/eval/cases.json'), 'utf8'));
   const system = buildSystemPrompt();
+  const runs = Math.max(1, Number(process.env.EVAL_RUNS ?? 3));
 
-  let pass = 0;
-  const failures: string[] = [];
-
-  for (const c of cases) {
+  // 单次判定：返回 null 表示命中，否则返回失败原因（含实际选了哪个工具）
+  async function once(c: Case): Promise<string | null> {
     const messages: Message[] = [{ role: 'system', content: system }, { role: 'user', content: c.input }];
-    let line: string;
     try {
       const resp = await callLLM(messages, TOOLS, deepseekKey, anthropicKey);
       const call = resp.toolCalls?.[0];
-      if (!call) {
-        line = `❌ "${c.input}" → 未调用工具（期望 ${c.expectTool}）`;
-      } else if (call.name !== c.expectTool) {
-        line = `❌ "${c.input}" → 工具 ${call.name}（期望 ${c.expectTool}）`;
-      } else {
-        const argErr = c.expectArgs ? argMatches(c.expectArgs, call.input) : null;
-        if (argErr) {
-          line = `❌ "${c.input}" → 工具对，但${argErr}`;
-        } else {
-          line = `✅ "${c.input}" → ${call.name}`;
-          pass++;
-        }
-      }
+      if (!call) return '未调用工具';
+      if (call.name !== c.expectTool) return call.name;
+      const argErr = c.expectArgs ? argMatches(c.expectArgs, call.input) : null;
+      return argErr ? `参数:${argErr}` : null;
     } catch (e) {
-      line = `❌ "${c.input}" → 调用异常：${e instanceof Error ? e.message : String(e)}`;
+      return `异常:${e instanceof Error ? e.message : String(e)}`;
     }
-    console.log(line);
-    if (line.startsWith('❌')) failures.push(line);
   }
 
-  const rate = pass / cases.length;
-  console.log(`\n通过率 ${pass}/${cases.length} = ${(rate * 100).toFixed(1)}%（阈值 ${(THRESHOLD * 100)}%）`);
-  if (failures.length) {
-    console.log('\n失败项：');
-    failures.forEach(f => console.log('  ' + f));
+  let totalPass = 0;
+  const systematic: string[] = [];
+  const flaky: string[] = [];
+  console.log(`每条采样 ${runs} 次…\n`);
+
+  for (const c of cases) {
+    let hit = 0;
+    const misses: string[] = [];
+    for (let i = 0; i < runs; i++) {
+      const err = await once(c);
+      if (err === null) hit++; else misses.push(err);
+    }
+    totalPass += hit;
+    const mark = hit === runs ? '✅' : hit === 0 ? '❌' : '⚠️';
+    const detail = misses.length ? `  ← ${[...new Set(misses)].join(', ')}` : '';
+    console.log(`${mark} ${hit}/${runs}  "${c.input}" → ${c.expectTool}${detail}`);
+    if (hit === 0) systematic.push(`${c.input} → 期望 ${c.expectTool}，实际 ${[...new Set(misses)].join('/')}`);
+    else if (hit < runs) flaky.push(`${c.input}（${hit}/${runs}）`);
+  }
+
+  const rate = totalPass / (cases.length * runs);
+  console.log(`\n总命中率 ${totalPass}/${cases.length * runs} = ${(rate * 100).toFixed(1)}%（阈值 ${THRESHOLD * 100}%）`);
+  if (systematic.length) {
+    console.log(`\n❌ 系统性失败（每次都错，需修）：`);
+    systematic.forEach(f => console.log('  ' + f));
+  }
+  if (flaky.length) {
+    console.log(`\n⚠️ 抖动（偶发，多为模型随机性）：`);
+    flaky.forEach(f => console.log('  ' + f));
   }
   process.exit(rate >= THRESHOLD ? 0 : 1);
 }

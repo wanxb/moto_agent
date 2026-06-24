@@ -68,7 +68,7 @@ export const TOOLS: ToolDefinition[] = [
     type: 'function',
     function: {
       name: 'get_last_record',
-      description: '仅查询「最近/上次加油」记录的详情（如"上次什么时候加的油""最近一次加油多少钱"）。其它意图不要用此工具。',
+      description: '仅查询「最近/上次加油」记录的详情（如"上次什么时候加的油""最近一次加油多少钱""最近油耗多少"）。注意：设提醒用 set_reminder、改记录用 update_last_fuel、保养用 maintenance 工具，不要拿此工具替代它们。',
       parameters: {
         type: 'object',
         properties: {
@@ -96,7 +96,7 @@ export const TOOLS: ToolDefinition[] = [
     type: 'function',
     function: {
       name: 'list_vehicles',
-      description: '仅列出全部车辆（如"我有哪些车""车辆列表"）。增车/改名/设默认请用对应工具，不要用此工具。',
+      description: '仅列出全部车辆（如"我有哪些车""列表""车辆""我的车"）。其它意图（记录/查询/改名/设默认/保养/提醒）请用对应工具，不要用此工具。',
       parameters: { type: 'object', properties: {}, required: [] },
     },
   },
@@ -133,7 +133,7 @@ export const TOOLS: ToolDefinition[] = [
     type: 'function',
     function: {
       name: 'log_maintenance',
-      description: '记录一次维修保养（换机油/轮胎/保险/刹车/链条等）。用户描述保养时调用。',
+      description: '记录一次维修保养或相关支出（换机油/轮胎/刹车/链条、交保险、年检等）。凡是"交了保险X""买了保险""换了X""做了X保养""花X做了X"都要调用它记录下来，里程或费用没说就不传。不要只回复确认而不记录。',
       parameters: {
         type: 'object',
         properties: {
@@ -168,7 +168,7 @@ export const TOOLS: ToolDefinition[] = [
     type: 'function',
     function: {
       name: 'set_reminder',
-      description: '设置定时提醒。只要用户要"提醒"做某事就用它：里程类（"机油每3000公里提醒我""每3000公里提醒换机油"→mode=mileage+interval_km；"到13000公里提醒"→mode=mileage+trigger_odometer）；日期类（"保险2027-01-05到期提醒"→mode=date+trigger_date）。',
+      description: '设置定时提醒。检测到"提醒"二字就务必用此工具，不要用查询工具。里程类："每N公里提醒X"/"换X每N公里"/"X每N公里提醒我"→mode=mileage+interval_km；"到N公里提醒X"→trigger_odometer。日期类："保险Y日到期提醒"→mode=date+trigger_date。设提醒才是提醒，查记录不是提醒。',
       parameters: {
         type: 'object',
         properties: {
