@@ -46,7 +46,7 @@ describe('insertFuelRecord / getLastFuelRecord', () => {
 });
 
 describe('getRecentFuelRecords', () => {
-  it('returns records ordered by odometer descending', async () => {
+  it('returns records ordered by date descending', async () => {
     await insertFuelRecord(env.DB, { date: '2026-04-01', odometer: 8000, liters: 8, price_total: 78 });
     await insertFuelRecord(env.DB, { date: '2026-05-01', odometer: 9000, liters: 9, price_total: 88 });
     await insertFuelRecord(env.DB, { date: '2026-06-01', odometer: 10000, liters: 10, price_total: 98 });

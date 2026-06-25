@@ -150,7 +150,7 @@ export default {
       if (url.pathname === '/dashboard' || url.pathname === '/dashboard/') {
         const token = env.ALLOWED_CHAT_ID || '';
         const lang = url.searchParams.get('lang') || undefined;
-        return new Response(dashboardPage(token, lang), { status: 200, headers: { 'Content-Type': 'text/html; charset=utf-8' } });
+        return new Response(dashboardPage(token, lang), { status: 200, headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store, max-age=0' } });
       }
 
       // ── Debug ping ─────────────────────────────────────────────────────────
@@ -173,7 +173,14 @@ export default {
 
       const bot = createBot(env);
       const handle = webhookCallback(bot, 'cloudflare-mod');
-      return handle(request);
+
+      // grammY webhook 内未捕获的错误兜底（否则 Workers 返回 1101）
+      try {
+        return await handle(request);
+      } catch (e) {
+        console.error('[webhook] grammY error:', e instanceof Error ? e.stack : String(e));
+        return new Response('OK', { status: 200 }); // 不回 500 避免 Telegram 重试风暴
+      }
     } catch (e) {
       console.error('[worker] unhandled error:', e instanceof Error ? e.stack : String(e));
       return new Response('Internal Server Error', { status: 500 });

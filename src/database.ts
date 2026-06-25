@@ -27,16 +27,16 @@ export async function insertMileageRecord(db: D1Database, data: {
 // 所有读路径都过滤 deleted_at IS NULL（软删除，spec 004）。
 export async function getLastFuelRecord(db: D1Database, vehicleId?: number): Promise<FuelRecord | null> {
   if (vehicleId === undefined) {
-    return db.prepare('SELECT * FROM fuel_records WHERE deleted_at IS NULL ORDER BY odometer DESC LIMIT 1').first<FuelRecord>();
+    return db.prepare('SELECT * FROM fuel_records WHERE deleted_at IS NULL ORDER BY date DESC, id DESC LIMIT 1').first<FuelRecord>();
   }
-  return db.prepare('SELECT * FROM fuel_records WHERE vehicle_id = ? AND deleted_at IS NULL ORDER BY odometer DESC LIMIT 1')
+  return db.prepare('SELECT * FROM fuel_records WHERE vehicle_id = ? AND deleted_at IS NULL ORDER BY date DESC, id DESC LIMIT 1')
     .bind(vehicleId).first<FuelRecord>();
 }
 
 export async function getRecentFuelRecords(db: D1Database, limit: number, vehicleId?: number): Promise<FuelRecord[]> {
   const stmt = vehicleId === undefined
-    ? db.prepare('SELECT * FROM fuel_records WHERE deleted_at IS NULL ORDER BY odometer DESC LIMIT ?').bind(limit)
-    : db.prepare('SELECT * FROM fuel_records WHERE vehicle_id = ? AND deleted_at IS NULL ORDER BY odometer DESC LIMIT ?').bind(vehicleId, limit);
+    ? db.prepare('SELECT * FROM fuel_records WHERE deleted_at IS NULL ORDER BY date DESC, id DESC LIMIT ?').bind(limit)
+    : db.prepare('SELECT * FROM fuel_records WHERE vehicle_id = ? AND deleted_at IS NULL ORDER BY date DESC, id DESC LIMIT ?').bind(vehicleId, limit);
   const { results } = await stmt.all<FuelRecord>();
   return results;
 }

@@ -9,6 +9,8 @@ export function dashboardPage(tokenHint?: string, lang?: string): string {
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<script>document.write('<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js?t=' + Date.now() + '"><\/script>');</script>
 <link rel="icon" type="image/png" href="${favicon}">
 <title>Moto Agent Dashboard</title>
 <style>
@@ -162,22 +164,34 @@ h1 { font-size: 1.25rem; margin-bottom: 12px; }
 .item-list li .cost { font-weight: 600; color: var(--green); white-space: nowrap; }
 
 /* ── 加载更多 ── */
-.load-more {
-  display: block;
-  width: 100%;
-  padding: 12px;
-  margin-top: 8px;
-  border-radius: 10px;
-  border: 1px dashed var(--border);
-  background: transparent;
-  color: var(--muted);
-  font-size: .82rem;
+/* ── 分页条 ── */
+.page-bar {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 4px;
+  margin-top: 10px;
+  flex-wrap: wrap;
+}
+.page-bar button {
+  min-width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--card);
+  color: var(--text);
+  font-size: .8rem;
   cursor: pointer;
-  min-height: 44px;
+  padding: 0 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   transition: background .15s;
 }
-.load-more:hover, .load-more:active { background: var(--card); color: var(--text); }
-.load-more:disabled { opacity: .4; cursor: default; }
+.page-bar button:active { background: rgba(255,255,255,.1); }
+.page-bar button.active { background: var(--accent); color: #000; border-color: var(--accent); font-weight: 600; }
+.page-bar button:disabled { opacity: .3; cursor: default; }
+.page-bar .info { color: var(--muted); font-size: .75rem; padding: 0 6px; }
 
 /* ── 工具 ── */
 .empty { text-align: center; padding: 24px; color: var(--muted); font-size: .82rem; }
@@ -212,21 +226,21 @@ h1 { font-size: 1.25rem; margin-bottom: 12px; }
   <h2 id="fuel-h"></h2>
   <div class="table-wrap"><table class="fuel-table"><thead><tr id="fuel-th"></tr></thead><tbody id="fuel-body"></tbody></table></div>
   <div class="empty" id="fuel-empty" style="display:none"></div>
-  <button class="load-more" id="fuel-more" style="display:none"></button>
+  <div class="page-bar" id="fuel-page" style="display:none"></div>
 </section>
 
 <section class="list-section">
   <h2 id="maint-h"></h2>
   <ul class="item-list" id="maint-body"></ul>
   <div class="empty" id="maint-empty" style="display:none"></div>
-  <button class="load-more" id="maint-more" style="display:none"></button>
+  <div class="page-bar" id="maint-page" style="display:none"></div>
 </section>
 
 <section class="list-section">
   <h2 id="reminder-h"></h2>
   <ul class="item-list" id="reminder-body"></ul>
   <div class="empty" id="reminder-empty" style="display:none"></div>
-  <button class="load-more" id="reminder-more" style="display:none"></button>
+  <div class="page-bar" id="reminder-page" style="display:none"></div>
 </section>
 
 <div id="loading" class="loading"></div>
@@ -278,13 +292,10 @@ document.getElementById('fuel-th').innerHTML = [
 document.getElementById('fuel-empty').textContent = t('noFuel');
 document.getElementById('maint-empty').textContent = t('noMaint');
 document.getElementById('reminder-empty').textContent = t('noRem');
-document.getElementById('fuel-more').textContent = t('loadMore');
-document.getElementById('maint-more').textContent = t('loadMore');
-document.getElementById('reminder-more').textContent = t('loadMore');
 document.getElementById('loading').textContent = t('loading') + '...';
 
 var TOKEN = '${tokenParam}';
-var PAGE_SIZE = 15;
+var PAGE_SIZE = 10;
 var currentVehicle = '';
 
 // ── 分页状态 ──
@@ -367,9 +378,9 @@ function drawChart(ctx, recs) {
       data: {
         labels: recs.map(function(p) { return p.date; }),
         datasets: [
-          { label: t('fuelVolume'), data: recs.map(function(p) { return p.liters; }), backgroundColor: 'rgba(59,130,246,0.6)', borderColor: '#3b82f6', borderWidth: 1, yAxisID: 'y', type: 'bar' },
-          { label: t('fuelCost'), data: recs.map(function(p) { return p.cost; }), backgroundColor: 'rgba(16,185,129,0.6)', borderColor: '#10b981', borderWidth: 1, yAxisID: 'y1', type: 'bar' },
-          { label: t('fuelConsumption'), data: recs.map(function(p) { return p.consumption; }), borderColor: '#f59e0b', backgroundColor: 'transparent', borderWidth: 2, tension: 0.3, yAxisID: 'y2', type: 'line', pointRadius: 3, pointBackgroundColor: '#f59e0b', pointBorderColor: '#f59e0b', pointBorderWidth: 2, pointStyle: 'line' },
+          { label: t('fuelVolume'), data: recs.map(function(p) { return p.liters; }), backgroundColor: 'rgba(59,130,246,0.6)', borderColor: '#3b82f6', borderWidth: 1, yAxisID: 'y', type: 'bar', pointStyle: 'rectRounded' },
+          { label: t('fuelCost'), data: recs.map(function(p) { return p.cost; }), backgroundColor: 'rgba(16,185,129,0.6)', borderColor: '#10b981', borderWidth: 1, yAxisID: 'y1', type: 'bar', pointStyle: 'rectRounded' },
+          { label: t('fuelConsumption'), data: recs.map(function(p) { return p.consumption; }), borderColor: '#f59e0b', backgroundColor: 'transparent', borderWidth: 2, tension: 0.3, yAxisID: 'y', type: 'line', pointRadius: 3, pointBackgroundColor: '#f59e0b', pointBorderColor: '#f59e0b', pointBorderWidth: 2, pointStyle: 'line' },
         ],
       },
       options: {
@@ -379,13 +390,33 @@ function drawChart(ctx, recs) {
         plugins: { legend: { labels: { color: '#9ca3af', font: { size: 10 }, boxWidth: 12, padding: 12, usePointStyle: true } } },
         scales: {
           x: { ticks: { color: '#6b7280', maxTicksLimit: 8, font: { size: 10 } } },
-          y:  { type: 'linear', position: 'left',  title: { display: true, text: 'L / ' + t('lPer100km'), color: '#9ca3af' }, ticks: { color: '#9ca3af', font: { size: 10 } } },
+          y:  { type: 'linear', position: 'left',  title: { display: true, text: 'L', color: '#9ca3af' }, ticks: { color: '#9ca3af', font: { size: 10 } } },
           y1: { type: 'linear', position: 'right', title: { display: true, text: '¥', color: '#10b981' }, grid: { drawOnChartArea: false }, ticks: { color: '#9ca3af', font: { size: 10 } } },
-          y2: { type: 'linear', position: 'left', display: false, grid: { drawOnChartArea: false } },
         },
       },
     });
   });
+}
+
+// ── 分页条渲染 ──
+function renderPageBar(containerId, currentPage, totalPages, section) {
+  var el = document.getElementById(containerId);
+  if (!el) return;
+  if (totalPages <= 1) { el.style.display = 'none'; return; }
+  el.style.display = '';
+  var html = '';
+  html += '<button class="page-prev" data-section="' + section + '" ' + (currentPage <= 1 ? 'disabled' : '') + '>‹</button>';
+  var start = Math.max(1, currentPage - 2);
+  var end = Math.min(totalPages, currentPage + 2);
+  if (start > 1) html += '<button class="page-num" data-section="' + section + '" data-page="1">1</button>';
+  if (start > 2) html += '<span class="info">…</span>';
+  for (var p = start; p <= end; p++) {
+    html += '<button class="page-num' + (p === currentPage ? ' active' : '') + '" data-section="' + section + '" data-page="' + p + '">' + p + '</button>';
+  }
+  if (end < totalPages - 1) html += '<span class="info">…</span>';
+  if (end < totalPages) html += '<button class="page-num" data-section="' + section + '" data-page="' + totalPages + '">' + totalPages + '</button>';
+  html += '<button class="page-next" data-section="' + section + '" ' + (currentPage >= totalPages ? 'disabled' : '') + '>›</button>';
+  el.innerHTML = html;
 }
 
 // ── 每个列表的分页渲染 ──
@@ -396,7 +427,6 @@ function renderFuelPage(data) {
   var body = document.getElementById('fuel-body');
   var count = document.getElementById('fuel-count');
   var empty = document.getElementById('fuel-empty');
-  var more = document.getElementById('fuel-more');
   if (recs.length) {
     count.textContent = '(' + (data.total || recs.length) + ')';
     empty.style.display = 'none';
@@ -407,7 +437,7 @@ function renderFuelPage(data) {
     empty.style.display = fuelPage > 1 ? 'none' : '';
     if (fuelPage === 1) body.closest('.table-wrap').style.display = 'none';
   }
-  more.style.display = fuelPage < fuelTotalPages ? '' : 'none';
+  renderPageBar('fuel-page', fuelPage, fuelTotalPages, 'fuel');
 }
 
 function renderMaintPage(data) {
@@ -417,7 +447,6 @@ function renderMaintPage(data) {
   var body = document.getElementById('maint-body');
   var count = document.getElementById('maint-count');
   var empty = document.getElementById('maint-empty');
-  var more = document.getElementById('maint-more');
   if (recs.length) {
     count.textContent = '(' + (data.total || recs.length) + ')';
     empty.style.display = 'none';
@@ -428,7 +457,7 @@ function renderMaintPage(data) {
     empty.style.display = maintPage > 1 ? 'none' : '';
     if (maintPage === 1) body.style.display = 'none';
   }
-  more.style.display = maintPage < maintTotalPages ? '' : 'none';
+  renderPageBar('maint-page', maintPage, maintTotalPages, 'maint');
 }
 
 function renderRemPage(data) {
@@ -438,7 +467,6 @@ function renderRemPage(data) {
   var body = document.getElementById('reminder-body');
   var count = document.getElementById('reminder-count');
   var empty = document.getElementById('reminder-empty');
-  var more = document.getElementById('reminder-more');
   if (rems.length) {
     count.textContent = '(' + (data.total || rems.length) + ')';
     empty.style.display = 'none';
@@ -449,7 +477,7 @@ function renderRemPage(data) {
     empty.style.display = remPage > 1 ? 'none' : '';
     if (remPage === 1) body.style.display = 'none';
   }
-  more.style.display = remPage < remTotalPages ? '' : 'none';
+  renderPageBar('reminder-page', remPage, remTotalPages, 'reminder');
 }
 
 // ── 主加载 ──
@@ -525,52 +553,23 @@ function resetPages() {
   remPage = 1; remTotalPages = 1;
 }
 
-// ── 加载更多 ──
-async function loadMoreFuel() {
-  var activeBtn = document.querySelector('button[data-days].active');
-  var days = (activeBtn && activeBtn.dataset && activeBtn.dataset.days) ? activeBtn.dataset.days : 90;
-  var nextPage = fuelPage + 1;
-  var btn = document.getElementById('fuel-more');
-  btn.disabled = true; btn.textContent = t('loading') + '...';
+// ── 分页导航 ──
+async function goToPage(section, page) {
+  var daysEl = document.querySelector('button[data-days].active');
+  var days = (daysEl && daysEl.dataset && daysEl.dataset.days) ? daysEl.dataset.days : 90;
+  document.getElementById('error').textContent = '';
   try {
-    var data = await fetchApi('/api/v1/fuel-records?days=' + days + '&page=' + nextPage + '&limit=' + PAGE_SIZE);
-    var recs = safeRecords(data);
-    document.getElementById('fuel-body').insertAdjacentHTML('beforeend', recs.map(renderFuelRow).join(''));
-    fuelPage = data.page || nextPage;
-    fuelTotalPages = data.totalPages || fuelTotalPages;
-    document.getElementById('fuel-more').style.display = fuelPage < fuelTotalPages ? '' : 'none';
+    if (section === 'fuel') {
+      var data = await fetchApi('/api/v1/fuel-records?days=' + days + '&page=' + page + '&limit=' + PAGE_SIZE);
+      renderFuelPage(data);
+    } else if (section === 'maint') {
+      var data = await fetchApi('/api/v1/maintenance?page=' + page + '&limit=' + PAGE_SIZE);
+      renderMaintPage(data);
+    } else if (section === 'reminder') {
+      var data = await fetchApi('/api/v1/reminders?page=' + page + '&limit=' + PAGE_SIZE);
+      renderRemPage(data);
+    }
   } catch (e) { document.getElementById('error').textContent = t('loadFailed') + e.message; }
-  btn.disabled = false; btn.textContent = t('loadMore');
-}
-
-async function loadMoreMaint() {
-  var nextPage = maintPage + 1;
-  var btn = document.getElementById('maint-more');
-  btn.disabled = true; btn.textContent = t('loading') + '...';
-  try {
-    var data = await fetchApi('/api/v1/maintenance?page=' + nextPage + '&limit=' + PAGE_SIZE);
-    var recs = safeRecords(data);
-    document.getElementById('maint-body').insertAdjacentHTML('beforeend', recs.map(renderMaintRow).join(''));
-    maintPage = data.page || nextPage;
-    maintTotalPages = data.totalPages || maintTotalPages;
-    document.getElementById('maint-more').style.display = maintPage < maintTotalPages ? '' : 'none';
-  } catch (e) { document.getElementById('error').textContent = t('loadFailed') + e.message; }
-  btn.disabled = false; btn.textContent = t('loadMore');
-}
-
-async function loadMoreRem() {
-  var nextPage = remPage + 1;
-  var btn = document.getElementById('reminder-more');
-  btn.disabled = true; btn.textContent = t('loading') + '...';
-  try {
-    var data = await fetchApi('/api/v1/reminders?page=' + nextPage + '&limit=' + PAGE_SIZE);
-    var rems = safeArr(data.reminders);
-    document.getElementById('reminder-body').insertAdjacentHTML('beforeend', rems.map(renderRemRow).join(''));
-    remPage = data.page || nextPage;
-    remTotalPages = data.totalPages || remTotalPages;
-    document.getElementById('reminder-more').style.display = remPage < remTotalPages ? '' : 'none';
-  } catch (e) { document.getElementById('error').textContent = t('loadFailed') + e.message; }
-  btn.disabled = false; btn.textContent = t('loadMore');
 }
 
 // ── 事件绑定 ──
@@ -589,9 +588,22 @@ document.querySelectorAll('button[data-days]').forEach(function(b) {
   };
 });
 
-document.getElementById('fuel-more').addEventListener('click', loadMoreFuel);
-document.getElementById('maint-more').addEventListener('click', loadMoreMaint);
-document.getElementById('reminder-more').addEventListener('click', loadMoreRem);
+// ── 分页按钮事件（委托） ──
+document.body.addEventListener('click', function(e) {
+  var target = e.target;
+  var section = target.getAttribute && target.getAttribute('data-section');
+  if (!section) return;
+  if (target.classList.contains('page-num')) {
+    goToPage(section, parseInt(target.getAttribute('data-page')));
+  } else if (target.classList.contains('page-prev')) {
+    var cur = section === 'fuel' ? fuelPage : section === 'maint' ? maintPage : remPage;
+    if (cur > 1) goToPage(section, cur - 1);
+  } else if (target.classList.contains('page-next')) {
+    var cur = section === 'fuel' ? fuelPage : section === 'maint' ? maintPage : remPage;
+    var total = section === 'fuel' ? fuelTotalPages : section === 'maint' ? maintTotalPages : remTotalPages;
+    if (cur < total) goToPage(section, cur + 1);
+  }
+});
 
 load();
 </script>

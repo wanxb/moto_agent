@@ -42,6 +42,9 @@ npm run type-check       # tsc --noEmit，类型检查
 npm run db:init          # 初始化本地 D1（docs/schema.sql）
 npm run db:init:remote   # 初始化线上 D1
 npm run deploy           # 部署到 Cloudflare Workers
+npm run ingest-knowledge  # 知识库入库（OCR → 分块）
+npm run populate-vectorize # 知识库向量索引灌入
+npm run test-knowledge    # 离线评测知识库检索质量
 ```
 
 > 没有独立的 lint/format 命令；`tsc --strict` 是唯一的静态门禁。提交前至少跑 `type-check` + `test`。
@@ -77,8 +80,15 @@ npm run deploy           # 部署到 Cloudflare Workers
 | `test/*.test.ts` | 单元/集成测试（vitest + workers pool） | 新功能必须带测试 |
 | `test/utils.ts` | 测试用 `initDB`/`clearDB`/`makeEnv` | 改 schema 时这里的建表语句要同步 |
 | `scripts/seed-fuel.ts` | 历史数据导入脚本 | — |
+| `scripts/ingest-knowledge.ts` | 知识库离线入库：OCR → 清洗 → 分块 → JSON+SQL | 需装 poppler（winget install Poppler） |
+| `scripts/populate-vectorize.ts` | chunks → embedding → Vectorize 索引 | 幂等，利用 wrangler OAuth |
+| `scripts/test-knowledge.ts` | 离线评测知识库召回质量 | 本地余弦相似度 |
+| `src/routes/api.ts` | Dashboard REST API 路由 | 所有端点 token 鉴权 |
+| `src/routes/dashboard-html.ts` | Dashboard 前端 HTML（Chart.js + 分页 + 双语） | 图表/布局在此改 |
+| `src/knowledge/embed.ts` | Workers AI bge-m3 embedding 封装 | 输出 1024 维向量 |
+| `src/tools/knowledge-tools.ts` | `search_knowledge` 工具：RAG 检索入口 | 不直接调，由 Agent 调度 |
 
-数据流一句话：`Telegram → index.ts(鉴权) → bootstrap(Env) → pipeline.ts(语言检测→限流→会话→agent) → agent.ts(runAgentLoop) → ILLMProvider.chat() ⇄ tools/(lang) → database.ts(D1) → pipeline.ts(持久化→回复)`。
+数据流一句话：`Telegram → index.ts(鉴权) → bootstrap(Env) → pipeline.ts(语言检测→限流→会话→agent) → agent.ts(runAgentLoop) → ILLMProvider.chat() ⇄ tools/(lang) → database.ts(D1) / knowledge(Vectorize+D1) → pipeline.ts(持久化→回复)`。
 
 ---
 
