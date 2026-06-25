@@ -17,6 +17,11 @@ preview_id = "c7e3944db10449e79cc12040fd5781e3"
 [triggers]
 crons = ["0 1 * * *"]
 
+# Vectorize 向量索引（spec 015 知识库 RAG）
+[[vectorize]]
+binding = "KNOWLEDGE_INDEX"
+index_name = "knowledge_index"
+
 # Workers AI 绑定（spec 008 语音转文字 Whisper）
 [ai]
 binding = "AI"

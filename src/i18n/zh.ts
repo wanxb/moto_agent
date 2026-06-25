@@ -123,6 +123,12 @@ export const zh: Record<string, string> = {
   'lang.switched': '✅ 语言已切换为{0}。',
   'lang.unknown': '支持的语言：zh（中文）、en（English）。示例：/lang en',
 
+  // ── 知识库 RAG（spec 015）──
+  'knowledge.empty_query': '请输入要搜索的问题。',
+  'knowledge.embed_failed': '知识库检索失败（向量化错误），请稍后重试。',
+  'knowledge.search_failed': '知识库检索失败（搜索错误），请稍后重试。',
+  'knowledge.no_results': '📖 知识库中未找到相关信息。建议去专业维修站咨询。',
+
   // ── 单位 ──
   'unit.km': 'km',
   'unit.l': 'L',

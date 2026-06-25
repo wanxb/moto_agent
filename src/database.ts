@@ -260,3 +260,17 @@ export async function cancelReminders(db: D1Database, opts: { type: string; vehi
 export async function markReminderDone(db: D1Database, id: number, firedAt: string): Promise<void> {
   await db.prepare("UPDATE reminders SET status = 'done', fired_at = ? WHERE id = ?").bind(firedAt, id).run();
 }
+
+// ── 知识库 RAG（spec 015）───────────────────────────────────────────────────────
+
+import type { KnowledgeChunk } from './types';
+
+/** 按 id 列表查询 chunk 原文，保持传入顺序（即 Vectorize 的相关度排序） */
+export async function getChunksById(db: D1Database, ids: number[]): Promise<KnowledgeChunk[]> {
+  if (ids.length === 0) return [];
+  const placeholders = ids.map(() => '?').join(',');
+  const sql = `SELECT * FROM knowledge_chunks WHERE id IN (${placeholders})`;
+  const { results } = await db.prepare(sql).bind(...ids).all<KnowledgeChunk>();
+  const map = new Map(results.map(r => [r.id, r]));
+  return ids.map(id => map.get(id)).filter((r): r is KnowledgeChunk => r !== undefined);
+}

@@ -11,7 +11,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:ui": "vitest --ui",
-    "eval": "npx tsx scripts/eval.ts"
+    "eval": "npx tsx scripts/eval.ts",
+    "ingest-knowledge": "npx tsx scripts/ingest-knowledge.ts"
   },
   "dependencies": {
     "grammy": "^1.31.0"
@@ -19,6 +20,13 @@
   "devDependencies": {
     "@cloudflare/vitest-pool-workers": "^0.5.0",
     "@cloudflare/workers-types": "^4.20241218.0",
+    "canvas": "^3.2.3",
+    "pdf-lib": "^1.17.1",
+    "pdf-parse": "^2.4.5",
+    "pdf2pic": "^3.2.0",
+    "pdfjs-dist": "^6.0.227",
+    "sharp": "^0.35.2",
+    "tesseract.js": "^7.0.0",
     "typescript": "^5.7.2",
     "vitest": "^2.0.0",
     "wrangler": "^3.101.0"

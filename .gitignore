@@ -16,3 +16,20 @@ dist/
 
 # Logs
 *.log
+
+# Knowledge base - source PDFs (too large, only generated JSON/SQL committed)
+knowledge/*.pdf
+knowledge/*.txt
+
+# Temp files from OCR processing
+/tmp/pdfocr_*/
+
+# tesseract.js language data downloads
+chi_sim.traineddata
+eng.traineddata
+
+# Test artifacts
+canvas-test.png
+
+# Backup
+knowledge_bak/

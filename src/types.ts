@@ -9,6 +9,7 @@ export interface Env {
   ANTHROPIC_API_KEY: string;
   ALLOWED_CHAT_ID: string;
   DASHBOARD_URL?: string;   // Dashboard 链接，bot /dashboard 命令使用
+  KNOWLEDGE_INDEX: VectorizeIndex;  // spec 015 知识库 RAG
 }
 
 // OpenAI-compatible message format (used internally and for DeepSeek)
@@ -103,4 +104,17 @@ export interface Reminder {
 // getActiveReminders 的 LEFT JOIN 结果，附带车辆名
 export interface ReminderWithVehicle extends Reminder {
   vehicle_name: string | null;
+}
+
+// ── 知识库 RAG（spec 015）───────────────────────────────────────────────────────
+
+export interface KnowledgeChunk {
+  id: number;
+  chunk_text: string;
+  source_doc: string;
+  section_title: string | null;
+  chunk_index: number;
+  topics: string | null;
+  doc_hash: string | null;
+  created_at: string;
 }

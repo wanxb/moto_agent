@@ -12,6 +12,7 @@ import { FallbackLLM } from './infra/fallback-llm';
 import { RouterLLM } from './router';
 import { runAgentLoop } from './agent';
 import { registry } from './tools';
+import { SearchKnowledgeTool } from './tools/knowledge-tools';
 import { runPipeline, type AgentRunner } from './gateway/pipeline';
 import type { ChannelAdapter } from './ports';
 
@@ -43,6 +44,8 @@ export function bootstrap(env: Env): App {
 
   const llm = new RouterLLM(simpleTier, complexTier);
 
+  // 注册知识库搜索工具（需要 Env 中的 AI/KNOWLEDGE_INDEX 绑定）
+  registry.register(new SearchKnowledgeTool(env.AI, env.KNOWLEDGE_INDEX));
   const tools = registry.toOpenAI();
   const agent: AgentRunner = (messages: Message[], db: D1Database, lang?: Lang) =>
     runAgentLoop(messages, llm, tools, registry, db, lang);

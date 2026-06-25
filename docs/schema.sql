@@ -77,3 +77,16 @@ CREATE INDEX IF NOT EXISTS idx_maint_type      ON maintenance_records(type);
 CREATE INDEX IF NOT EXISTS idx_reminders_status  ON reminders(status);
 CREATE INDEX IF NOT EXISTS idx_reminders_vehicle ON reminders(vehicle_id);
 CREATE INDEX IF NOT EXISTS idx_fuel_deleted      ON fuel_records(deleted_at);
+
+-- 知识库 RAG（spec 015）
+CREATE TABLE IF NOT EXISTS knowledge_chunks (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    chunk_text   TEXT    NOT NULL,
+    source_doc   TEXT    NOT NULL,
+    section_title TEXT,
+    chunk_index  INTEGER NOT NULL,
+    topics       TEXT,
+    doc_hash     TEXT,
+    created_at   TEXT    NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_knowledge_source ON knowledge_chunks(source_doc);

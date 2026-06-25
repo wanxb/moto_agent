@@ -123,6 +123,12 @@ export const en: Record<string, string> = {
   'lang.switched': '✅ Language switched to {0}.',
   'lang.unknown': 'Supported languages: zh (中文), en (English). E.g. /lang en',
 
+  // ── Knowledge base RAG (spec 015) ──
+  'knowledge.empty_query': 'Please enter a search query.',
+  'knowledge.embed_failed': 'Knowledge search failed (embedding error), please try again.',
+  'knowledge.search_failed': 'Knowledge search failed (search error), please try again.',
+  'knowledge.no_results': '📖 No relevant information found in the knowledge base. Consider consulting a professional service shop.',
+
   // ── Units ──
   'unit.km': 'km',
   'unit.l': 'L',

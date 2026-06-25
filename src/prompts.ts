@@ -40,7 +40,9 @@ function buildZh(today: string): string {
 15. 用户要删最近一条加油记录（"删掉刚才那条""删除最近记录"）用 delete_last_fuel
 
 输出规则：
-16. 用纯文本回复，不要用 Markdown 语法（不要出现 ** * \` # > 等符号），可以用 emoji 和换行来排版`;
+16. 用纯文本回复，不要用 Markdown 语法（不要出现 ** * \` # > 等符号），可以用 emoji 和换行来排版
+
+	17. 用户问摩托车保养/维修/故障诊断/使用操作等专业知识（如"怎么换机油""故障灯亮了""胎压多少""发动机异响"）时调用 search_knowledge。搜索结果来源于手册等权威资料，不要用自己的知识代替。`;
 }
 
 function buildEn(today: string): string {
@@ -74,5 +76,7 @@ Correction rules:
 15. To delete the last fuel record ("delete that last one") use delete_last_fuel
 
 Output rules:
-16. Use plain text only — no Markdown syntax (no ** * \` # > symbols). You may use emoji and line breaks for formatting.`;
+16. Use plain text only — no Markdown syntax (no ** * \` # > symbols). You may use emoji and line breaks for formatting.
+
+	17. For maintenance/repair/troubleshooting questions ("how to change oil", "check engine light", "tire pressure"), call search_knowledge. Results come from official manuals — don't substitute with your own knowledge.`;
 }

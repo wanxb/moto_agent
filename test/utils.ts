@@ -60,6 +60,16 @@ export async function initDB(db: D1Database): Promise<void> {
       fired_at         TEXT,
       created_at       TEXT    NOT NULL DEFAULT (datetime('now'))
     )`),
+    db.prepare(`CREATE TABLE IF NOT EXISTS knowledge_chunks (
+      id           INTEGER PRIMARY KEY AUTOINCREMENT,
+      chunk_text   TEXT    NOT NULL,
+      source_doc   TEXT    NOT NULL,
+      section_title TEXT,
+      chunk_index  INTEGER NOT NULL,
+      topics       TEXT,
+      doc_hash     TEXT,
+      created_at   TEXT    NOT NULL DEFAULT (datetime('now'))
+    )`),
   ]);
 }
 
@@ -70,6 +80,7 @@ export async function clearDB(db: D1Database): Promise<void> {
     db.prepare('DELETE FROM maintenance_records'),
     db.prepare('DELETE FROM reminders'),
     db.prepare('DELETE FROM vehicles'),
+    db.prepare('DELETE FROM knowledge_chunks'),
   ]);
 }
 
