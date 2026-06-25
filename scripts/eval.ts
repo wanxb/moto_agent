@@ -16,7 +16,7 @@
 
 import { readFileSync, existsSync } from 'fs';
 import { join } from 'path';
-import { callLLM } from '../src/llm-transport';
+import { callDeepSeek } from '../src/llm-transport';
 import { TOOLS } from '../src/tools';
 import { buildSystemPrompt } from '../src/agent';
 import type { Message } from '../src/types';
@@ -63,7 +63,7 @@ async function main(): Promise<void> {
   async function once(c: Case): Promise<string | null> {
     const messages: Message[] = [{ role: 'system', content: system }, { role: 'user', content: c.input }];
     try {
-      const resp = await callLLM(messages, TOOLS, deepseekKey, anthropicKey);
+      const resp = await callDeepSeek(messages, TOOLS, deepseekKey);
       const call = resp.toolCalls?.[0];
       if (!call) return '未调用工具';
       if (call.name !== c.expectTool) return call.name;

@@ -3,6 +3,7 @@
 // 所有 ChannelAdapter 实现同一种接口，加一个新渠道不改 core。
 
 import type { Message, LLMResponse, ToolDefinition } from './types';
+import type { Lang } from './i18n/types';
 
 // ── 消息发送 ─────────────────────────────────────────────────────────────────
 
@@ -44,4 +45,6 @@ export interface ChannelAdapter {
   reply(userId: string, text: string): Promise<unknown>;
   /** 可选：在 pipeline 之前做渠道特有鉴权，失败抛错 */
   authenticate?(raw: unknown): Promise<void> | void;
+  /** 可选：检测用户语言偏好，返回 'zh' | 'en' */
+  detectLanguage?(): Promise<Lang> | Lang;
 }

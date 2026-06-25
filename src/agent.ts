@@ -1,7 +1,6 @@
-import { Message, Env, type ToolDefinition } from './types';
+import { Message, type ToolDefinition } from './types';
 import { MAX_ROUNDS } from './config';
-import { TOOLS, registry } from './tools';
-import { callLLM } from './llm-transport';
+import { registry } from './tools';
 import type { ILLMProvider } from './ports';
 import type { ToolRegistry } from './tools/interface';
 import type { Lang } from './i18n/types';
@@ -12,7 +11,7 @@ import { buildSystemPrompt } from './prompts';
 export { buildSystemPrompt };
 
 /**
- * Agent Loop（新签名，R2）：LLM 与工具注册器由外部注入。
+ * Agent Loop：LLM 与工具注册器由外部注入。
  */
 export async function runAgentLoop(
   messages: Message[],
@@ -39,40 +38,6 @@ export async function runAgentLoop(
       let result: string;
       try {
         result = await registry.dispatch(tc.name, tc.input, db, lang);
-        console.log(`[tool] ${tc.name} →`, result.slice(0, 80));
-      } catch (e) {
-        result = t('general.tool_error', lang, e instanceof Error ? e.message : String(e));
-        console.error(`[tool] ${tc.name} error:`, e);
-      }
-      const toolMsg: Message = { role: 'tool', tool_call_id: tc.id, content: result };
-      working.push(toolMsg);
-      messages.push(toolMsg);
-    }
-  }
-
-  return t('general.timeout', lang);
-}
-
-// ── 旧签名（兼容现有调用方 + 测试）───────────────────────────────────────
-
-export async function agentLoop(messages: Message[], env: Env, lang: Lang = 'zh'): Promise<string> {
-  const systemMsg: Message = { role: 'system', content: buildSystemPrompt(lang) };
-  const working: Message[] = [systemMsg, ...messages];
-
-  for (let round = 0; round < MAX_ROUNDS; round++) {
-    const response = await callLLM(working, registry.toOpenAI(lang), env.DEEPSEEK_API_KEY, env.ANTHROPIC_API_KEY);
-
-    working.push(response.assistantMessage);
-    messages.push(response.assistantMessage);
-
-    if (!response.toolCalls?.length) {
-      return response.textContent ?? t('general.no_reply', lang);
-    }
-
-    for (const tc of response.toolCalls) {
-      let result: string;
-      try {
-        result = await registry.dispatch(tc.name, tc.input, env.DB, lang);
         console.log(`[tool] ${tc.name} →`, result.slice(0, 80));
       } catch (e) {
         result = t('general.tool_error', lang, e instanceof Error ? e.message : String(e));

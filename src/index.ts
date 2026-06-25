@@ -2,10 +2,10 @@ import { Bot, webhookCallback } from 'grammy';
 import { Env } from './types';
 import type { Lang } from './i18n/types';
 import { t, setLang } from './i18n';
-import { runAgent } from './session';
 import { runScheduled } from './scheduled';
 import { transcribe } from './stt';
 import { bootstrap } from './bootstrap';
+import { TelegramAdapter } from './gateway/adapters/telegram';
 import { RestAdapter } from './gateway/adapters/rest';
 import { MAX_VOICE_SECONDS } from './config';
 import { handleApiRequest } from './routes/api';
@@ -42,12 +42,16 @@ function createBot(env: Env): Bot {
     await ctx.reply(makeHelp(lang));
   });
 
-  bot.command('last', ctx =>
-    runAgent(ctx.chat.id.toString(), '获取最近一次加油记录', env, ctx)
-  );
-  bot.command('stats', ctx =>
-    runAgent(ctx.chat.id.toString(), '查询本月油耗统计', env, ctx)
-  );
+  bot.command('last', async ctx => {
+    const app = bootstrap(env);
+    const adapter = new TelegramAdapter(ctx, env);
+    await app.run(adapter, { text: '获取最近一次加油记录' });
+  });
+  bot.command('stats', async ctx => {
+    const app = bootstrap(env);
+    const adapter = new TelegramAdapter(ctx, env);
+    await app.run(adapter, { text: '查询本月油耗统计' });
+  });
 
   // spec 010: 语言切换命令
   bot.command('lang', async ctx => {
@@ -71,9 +75,11 @@ function createBot(env: Env): Bot {
     return ctx.reply(t('dashboard.link', 'zh', url), { parse_mode: 'HTML' });
   });
 
-  bot.on('message:text', ctx =>
-    runAgent(ctx.chat.id.toString(), ctx.message.text, env, ctx)
-  );
+  bot.on('message:text', async ctx => {
+    const app = bootstrap(env);
+    const adapter = new TelegramAdapter(ctx, env);
+    await app.run(adapter, { text: ctx.message!.text ?? '' });
+  });
 
   // 语音输入（spec 008）：转文字后走与打字完全相同的链路
   bot.on('message:voice', async ctx => {
@@ -108,7 +114,9 @@ function createBot(env: Env): Bot {
     }
 
     await ctx.reply(t('voice.heard', lang, text));
-    await runAgent(chatId, text, env, ctx);
+    const app = bootstrap(env);
+    const adapter = new TelegramAdapter(ctx, env);
+    await app.run(adapter, { text });
   });
 
   return bot;

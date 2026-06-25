@@ -130,7 +130,7 @@ return callAnthropic()                       # 切备用模型
 
 - **可重试**：429（限流）、5xx（服务端）。
 - **不可重试（直接抛）**：4xx（如 401 鉴权、400 请求格式）——fallback 也救不了，快速失败。
-- 顶层（`session.ts`）再兜一层，整体失败回复"出错了，请稍后重试"。
+- 顶层（pipeline.ts 的 catch）再兜一层，整体失败回复"出错了，请稍后重试"。
 
 ### 消息格式互转（改 llm.ts 必看）
 
@@ -151,11 +151,11 @@ return callAnthropic()                       # 切备用模型
 
 ## 5. 会话上下文管理
 
-见 `src/session.ts`：
+会话管理分布在两个地方：
 
-- 每 `chatId` 一份历史，存 KV `session:{chatId}`，**保留约 `MAX_SESSION_MESSAGES = 10` 条**，**TTL `SESSION_TTL = 3600`s（1h）**。
+- **持久化**：`ISessionStore`（`infra/cf-kv-session.ts`）——每 `chatId` 一份历史，存 KV `session:{chatId}`，**保留约 `MAX_SESSION_MESSAGES = 10` 条**，**TTL `SESSION_TTL = 3600`s（1h）**。
+- **截断**：`src/session-store/trim-history.ts`——**按完整回合对齐**（spec 007）：在 ≤ maxMessages 前提下尽量多保留，且**必从 `user` 消息起**，绝不把 assistant 的 `tool_calls` 与其 `tool` 结果切散（否则下次请求悬空配对会被模型 API 拒绝）。单个回合超长时宁可超额也从该回合 `user` 起。
 - system prompt **不入**历史（每次新鲜生成）。
-- 截断策略：`trimHistory()`——**按完整回合对齐**（spec 007）：在 ≤ maxMessages 前提下尽量多保留，且**必从 `user` 消息起**，绝不把 assistant 的 `tool_calls` 与其 `tool` 结果切散（否则下次请求悬空配对会被模型 API 拒绝）。单个回合超长时宁可超额也从该回合 `user` 起。
 - 这 10 条**含 tool 调用/结果消息**，故实际记住的对话轮次更短；复杂多轮澄清仍可能丢早期上下文（已知取舍，见 [`../PRD.md`](../PRD.md) §11）。
 
 > 当前不引入上下文压缩/持久记忆（教程 S08/S09），Phase 4 视需要再加。

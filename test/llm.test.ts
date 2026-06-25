@@ -1,9 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { callLLM } from '../src/llm-transport';
+import { callDeepSeek } from '../src/llm-transport';
 import type { Message, ToolDefinition } from '../src/types';
 
 const DS_KEY  = 'test-ds-key';
-const ANT_KEY = 'test-ant-key';
 
 const MESSAGES: Message[] = [
   { role: 'user', content: '你好' },
@@ -43,7 +42,7 @@ describe('DeepSeek happy path', () => {
   it('returns text when model responds without tool calls', async () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(deepseekText('你好！有什么可以帮你？'));
 
-    const result = await callLLM(MESSAGES, NO_TOOLS, DS_KEY, ANT_KEY);
+    const result = await callDeepSeek(MESSAGES, NO_TOOLS, DS_KEY);
 
     expect(result.textContent).toBe('你好！有什么可以帮你？');
     expect(result.toolCalls).toBeNull();
@@ -59,7 +58,7 @@ describe('DeepSeek happy path', () => {
       deepseekToolCall('get_last_record', {})
     );
 
-    const result = await callLLM(MESSAGES, tools, DS_KEY, ANT_KEY);
+    const result = await callDeepSeek(MESSAGES, tools, DS_KEY);
 
     expect(result.toolCalls).toHaveLength(1);
     expect(result.toolCalls![0].name).toBe('get_last_record');
@@ -71,40 +70,29 @@ describe('DeepSeek happy path', () => {
       deepseekToolCall('log_fuel', { date: '2026-06-23', odometer: 12000, liters: 10, price_total: 98 })
     );
 
-    const result = await callLLM(MESSAGES, NO_TOOLS, DS_KEY, ANT_KEY);
+    const result = await callDeepSeek(MESSAGES, NO_TOOLS, DS_KEY);
 
     expect(result.toolCalls![0].input).toEqual({
       date: '2026-06-23', odometer: 12000, liters: 10, price_total: 98,
     });
   });
-});
 
-describe('DeepSeek error handling', () => {
-  it('does NOT retry on 4xx (bad request)', async () => {
-    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(deepseekError(400));
+  it('passes model name when provided', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(deepseekText('ok'));
+    await callDeepSeek(MESSAGES, NO_TOOLS, DS_KEY, 'deepseek-v4-pro');
 
-    await expect(callLLM(MESSAGES, NO_TOOLS, DS_KEY, ANT_KEY)).rejects.toThrow('HTTP 400');
-    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    const options = fetchSpy.mock.calls[0][1] as { body: string };
+    const callBody = JSON.parse(options.body) as { model: string };
+    expect(callBody.model).toBe('deepseek-v4-pro');
   });
 
-  it('retries on 500 and succeeds on third attempt', async () => {
-    const fetchSpy = vi.spyOn(globalThis, 'fetch')
-      .mockResolvedValueOnce(deepseekError(500))
-      .mockResolvedValueOnce(deepseekError(500))
-      .mockResolvedValueOnce(deepseekText('第三次成功'));
+  it('uses default model when model param omitted', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(deepseekText('ok'));
+    await callDeepSeek(MESSAGES, NO_TOOLS, DS_KEY);
 
-    const result = await callLLM(MESSAGES, NO_TOOLS, DS_KEY, ANT_KEY);
-    expect(fetchSpy).toHaveBeenCalledTimes(3);
-    expect(result.textContent).toBe('第三次成功');
-  });
-
-  it('succeeds on second attempt after transient 500', async () => {
-    vi.spyOn(globalThis, 'fetch')
-      .mockResolvedValueOnce(deepseekError(500))
-      .mockResolvedValueOnce(deepseekText('重试成功'));
-
-    const result = await callLLM(MESSAGES, NO_TOOLS, DS_KEY, '');
-    expect(result.textContent).toBe('重试成功');
+    const options = fetchSpy.mock.calls[0][1] as { body: string };
+    const callBody = JSON.parse(options.body) as { model: string };
+    expect(callBody.model).toBe('deepseek-v4-flash');
   });
 });
 
@@ -112,7 +100,7 @@ describe('assistantMessage format', () => {
   it('returns an assistant message suitable for appending to history', async () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(deepseekText('好的'));
 
-    const result = await callLLM(MESSAGES, NO_TOOLS, DS_KEY, ANT_KEY);
+    const result = await callDeepSeek(MESSAGES, NO_TOOLS, DS_KEY);
     expect(result.assistantMessage.role).toBe('assistant');
     expect(result.assistantMessage.content).toBe('好的');
   });
@@ -122,7 +110,7 @@ describe('assistantMessage format', () => {
       deepseekToolCall('log_fuel', { odometer: 12000, liters: 10, price_total: 98, date: '2026-06-01' })
     );
 
-    const result = await callLLM(MESSAGES, NO_TOOLS, DS_KEY, ANT_KEY);
+    const result = await callDeepSeek(MESSAGES, NO_TOOLS, DS_KEY);
     const msg = result.assistantMessage as { role: string; tool_calls?: unknown[] };
     expect(msg.tool_calls).toHaveLength(1);
   });

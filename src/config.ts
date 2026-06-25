@@ -6,8 +6,10 @@
 export const MAX_ROUNDS = 4;
 
 // ── LLM ──────────────────────────────────────────────────────────────────────
-/** 主模型 ID（OpenAI 兼容格式，DeepSeek） */
-export const DEEPSEEK_MODEL = 'deepseek-chat';
+/** 主模型 ID（OpenAI 兼容格式，DeepSeek V4 Flash，2026-07-24 起替代 deepseek-chat） */
+export const DEEPSEEK_MODEL = 'deepseek-v4-flash';
+/** 强推理模型 ID（V4 Pro，用于分层路由等对推理质量要求高的场景） */
+export const DEEPSEEK_MODEL_PRO = 'deepseek-v4-pro';
 /** 备用模型 ID（Anthropic Messages 格式） */
 export const ANTHROPIC_MODEL = 'claude-sonnet-4-6';
 /** LLM 回复最大 token 数 */

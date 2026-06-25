@@ -5,9 +5,12 @@ import type { ILLMProvider } from '../ports';
 import type { Message, LLMResponse, ToolDefinition } from '../types';
 
 export class DeepSeekLLM implements ILLMProvider {
-  constructor(private apiKey: string) {}
+  constructor(
+    private apiKey: string,
+    private model?: string,
+  ) {}
 
   async chat(messages: Message[], tools: ToolDefinition[]): Promise<LLMResponse> {
-    return callDeepSeek(messages, tools, this.apiKey);
+    return callDeepSeek(messages, tools, this.apiKey, this.model);
   }
 }

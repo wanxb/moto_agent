@@ -48,7 +48,7 @@
 | **Webhook 入口** | `src/index.ts` | grammY bot、webhook secret 校验、命令路由、文本/**语音**消息路由、访问控制中间件 | 业务逻辑 |
 | **定时入口** | `src/index.ts` `scheduled()` + `src/scheduled.ts` | Cron Triggers 唤醒，扫描到期提醒并主动推送（spec 003） | 业务计算、SQL |
 | **语音转写** | `src/stt.ts` | `transcribe()`：Workers AI Whisper 把语音 OGG 转中文文本（spec 008） | 业务逻辑 |
-| **会话编排** | `src/session.ts` | KV 读写、调用 Agent Loop、回复前 `toPlainText` 清洗 markdown（spec 005）、截断历史 | LLM 细节、SQL |
+| **编排管道** | `src/gateway/pipeline.ts` + `TelegramAdapter` | 语言检测、限流、会话读写（`ISessionStore`）、调 Agent Loop、截断历史、回复前 `toPlainText` 清洗 markdown（spec 005） | LLM 细节、SQL |
 | **输出格式化** | `src/format.ts` | `toPlainText`：去 markdown 保留 emoji，供 Telegram 纯文本显示 | 业务逻辑 |
 | **国际化** | `src/i18n/` + `src/prompts.ts` | `t(key, lang, ...args)` 翻译函数；KV 存 `lang:{chatId}` 偏好；系统提示中英双语；`ToolRegistry.toOpenAI(lang)` 按语言选工具描述 | 业务逻辑 · [ADR-0008](adr/0008-i18n-bilingual.md) |
 | **Agent Loop** | `src/agent.ts` | system prompt、`while` 循环、工具调度、轮数护栏 | 具体工具实现、HTTP |
@@ -57,7 +57,7 @@
 | **数据访问** | `src/database.ts` | 纯 SQL 的 D1 CRUD | 业务计算 |
 | **类型** | `src/types.ts` | `Env`、消息/工具/LLM/记录类型 | — |
 
-> **分层纪律**：`index → session → agent → {llm, tools} → database`。上层可调下层，下层不反向依赖。业务计算集中在 `tools.ts`，`database.ts` 只做数据进出。
+> **分层纪律**：`index → bootstrap → pipeline → agent → {llm, tools} → database`。上层可调下层，下层不反向依赖。业务计算集中在 `tools.ts`，`database.ts` 只做数据进出。
 
 ---
 
@@ -67,13 +67,13 @@
 2. Telegram POST 到 `/telegram`，带 `X-Telegram-Bot-Api-Secret-Token`。
 3. `index.ts` 校验 secret → 失败 401；通过则 grammY 接管。
 4. 访问控制中间件校验 `chat.id == ALLOWED_CHAT_ID`，否则拒绝。
-5. `message:text` handler → `session.runAgent(chatId, text, env, ctx)`。
-6. `session.ts` 从 `SESSION_KV` 读 `session:{chatId}` 历史，push 当前用户消息。
-7. `agent.agentLoop()`：拼接 system prompt，调 `callLLM`。
-8. `llm.ts` 请求 DeepSeek；返回 `tool_calls`（`log_fuel`）。
-9. `agent.ts` `dispatchTool('log_fuel', ...)` → `tools.logFuel()` → `database.insertFuelRecord()` 写 D1，并计算本次油耗。
+5. `message:text` handler → `bootstrap(env)` → `TelegramAdapter(ctx, env)` → `app.run(adapter, { text })`。
+6. `pipeline.ts` 接管执行：语言检测（`TelegramAdapter.detectLanguage`）→ 限流（`rate-limiter.ts`）→ `ISessionStore.get(chatId)` 读 KV 历史 → push 当前消息。
+7. `runAgentLoop(messages, llm, tools, registry, db, lang)`：拼接 system prompt，调 `llm.chat()`。
+8. `llm.chat()`（经 `ILLMProvider` 派发）请求 DeepSeek/Claude；返回 `tool_calls`（`log_fuel`）。
+9. `agent.ts` `registry.dispatch('log_fuel', ...)` → `tools.logFuel()` → `database.insertFuelRecord()` 写 D1，并计算本次油耗。
 10. 工具结果作为 `tool` 消息回灌，Loop 再调 LLM；LLM 无新工具调用，返回最终文案。
-11. `session.ts` 截断历史写回 KV（TTL 1h），`ctx.reply()` 经 Bot API 回复用户。
+11. `pipeline.ts` `trimHistory()` 截断 → `ISessionStore.set()` 写回 KV（TTL 1h）→ `adapter.reply()` 经 Bot API 回复用户。
 
 > 关键时序与超时护栏（`MAX_ROUNDS`）见 [`agent-design.md`](agent-design.md)。
 

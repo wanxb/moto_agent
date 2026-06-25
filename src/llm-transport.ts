@@ -16,32 +16,13 @@ export function isRetryable(e: unknown): boolean {
   return e instanceof LLMError && (e.status === 429 || e.status >= 500);
 }
 
-export async function callLLM(
-  messages: Message[],
-  tools: ToolDefinition[],
-  deepseekKey: string,
-  anthropicKey: string
-): Promise<LLMResponse> {
-  for (let attempt = 0; attempt < 3; attempt++) {
-    try {
-      return await callDeepSeek(messages, tools, deepseekKey);
-    } catch (e) {
-      if (!isRetryable(e)) throw e;        // 4xx: 即刻抛出，不 fallback
-      if (attempt === 2) break;            // 3次 5xx/429 耗尽 → fallback
-      await sleep(500 * Math.pow(2, attempt));
-    }
-  }
-  console.log('[llm] DeepSeek unavailable, falling back to Anthropic');
-  return await callAnthropic(messages, tools, anthropicKey);
-}
-
 // ── DeepSeek (OpenAI-compatible) ─────────────────────────────────────────────
 
 export async function callDeepSeek(
-  messages: Message[], tools: ToolDefinition[], apiKey: string
+  messages: Message[], tools: ToolDefinition[], apiKey: string, model?: string
 ): Promise<LLMResponse> {
   const body: Record<string, unknown> = {
-    model: DEEPSEEK_MODEL,
+    model: model ?? DEEPSEEK_MODEL,
     messages,
     max_tokens: MAX_TOKENS,
   };

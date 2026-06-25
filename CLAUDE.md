@@ -55,24 +55,30 @@ npm run deploy           # 部署到 Cloudflare Workers
 | 文件 | 职责 | 改动时注意 |
 |------|------|-----------|
 | `src/index.ts` | Workers 入口；grammY bot、webhook 鉴权、命令路由、访问控制中间件 | 改鉴权要同步更新 [`docs/engineering/security.md`](docs/engineering/security.md) |
-| `src/session.ts` | 会话编排：读写 `SESSION_KV`、调用 agentLoop、回复用户 | KV 截断逻辑（`MAX_SESSION_MESSAGES`）在这里；语言检测/存储见 `src/i18n/` |
-| `src/agent.ts` | Agent Loop 核心：system prompt、`while` 循环、工具分发、轮数上限 | `MAX_ROUNDS` 是 Workers 超时护栏；`lang` 参数传递给工具和 prompt |
+| `src/config.ts` | 集中配置：`MAX_ROUNDS`、模型 ID、`SESSION_TTL`、可编辑列白名单等 | 改值要评估影响范围 |
+| `src/agent.ts` | Agent Loop 核心：system prompt、`while` 循环、工具分发、轮数上限 | `MAX_ROUNDS` 是 Workers 超时护栏；`lang` 参数传递给工具和 prompt；通过 `ILLMProvider` 接口调用模型 |
+| `src/bootstrap.ts` | 依赖注入容器：将 Env 组装为 App（llm / session / messenger / agent） | 新增模型层/路由策略时在此组合 |
+| `src/gateway/pipeline.ts` | 消息编排管道：语言检测→限流→会话→Agent→持久化→回复。所有渠道共用 | 渠道差异关在 `ChannelAdapter` 里 |
+| `src/gateway/adapters/telegram.ts` | Telegram 渠道适配器（`ChannelAdapter`） | 每次请求构造，含 `detectLanguage` |
+| `src/gateway/adapters/rest.ts` | REST API 渠道适配器（`ChannelAdapter`） | — |
+| `src/gateway/rate-limiter.ts` | 限流（基于 KV 滑动窗口） | — |
+| `src/session-store/trim-history.ts` | 按完整回合截断会话历史（原 session.ts 搬出） | 截断逻辑独立，无 session 依赖 |
+| `src/router/` | 分层模型路由：`classifier.ts`（启发式复杂度判定）、`router-llm.ts`（`RouterLLM` 实现 `ILLMProvider`） | 对 agent.ts 透明；规则：宁多花钱不降质量 |
 | `src/tools/` | 工具系统：`interface.ts`(Tool 接口+Registry)、`index.ts`(注册)、`fuel-tools.ts`、`vehicle-tools.ts` 等 | **新增能力的主战场**，见 §5；工具 `execute` 接受 `lang` 参数 |
-| `src/llm.ts` | 双 provider 封装：DeepSeek 主、Anthropic 备、重试与 fallback、消息格式互转 | 两条路径都要测；fallback 触发条件见注释 |
+| `src/llm-transport.ts` | 双 provider 底层：callDeepSeek / callAnthropic / 消息格式互转 / 重试 | 两条路径都要测；fallback 触发条件见注释 |
 | `src/database.ts` | D1 数据访问层（纯 SQL，无业务逻辑） | 业务计算放 `src/tools/`，这里只做 CRUD |
 | `src/types.ts` | 全局类型：`Env`、`Message`、工具/LLM 接口、`FuelRecord`、`Vehicle` | 改 Env 要同步 `wrangler.toml` 和 `test/utils.ts` |
 | `src/i18n/` | 国际化：`zh.ts`/`en.ts` 字典、`t()` 翻译、`fmtNumber/fmtKm/fmtCost`、`getLang/setLang` | 新增用户文字必须进字典；支持 `{0}` 占位参数 |
 | `src/prompts.ts` | 系统提示词：`buildSystemPrompt(lang)` 中英双语 | 改提示词要同步更新两个语言版本 |
-| `src/config.ts` | 集中配置：`MAX_ROUNDS`、模型 ID、`SESSION_TTL`、可编辑列白名单等 | 改值要评估影响范围 |
 | `src/scheduled.ts` | Cron 定时任务：到期提醒扫描 + 推送 + 自动续期 | 推送文案目前默认中文（cron 无用户上下文） |
 | `src/stt.ts` | 语音转文字：Cloudflare Workers AI Whisper | `language` 参数跟随用户语言偏好 |
-| `src/format.ts` | Markdown → 纯文本清洗 | Telegeram 回复前调用 |
+| `src/format.ts` | Markdown → 纯文本清洗 | Telegram 回复前调用 |
 | `docs/schema.sql` | D1 建表脚本 | 改 schema 必须走迁移流程，见 [`docs/engineering/data-model.md`](docs/engineering/data-model.md) |
 | `test/*.test.ts` | 单元/集成测试（vitest + workers pool） | 新功能必须带测试 |
 | `test/utils.ts` | 测试用 `initDB`/`clearDB`/`makeEnv` | 改 schema 时这里的建表语句要同步 |
 | `scripts/seed-fuel.ts` | 历史数据导入脚本 | — |
 
-数据流一句话：`Telegram → index.ts(鉴权+语言检测) → session.ts(KV读+lang) → agent.ts(Loop+lang) → llm.ts(模型) ⇄ tools/(lang) → database.ts(D1) → session.ts(KV写) → 回复`。
+数据流一句话：`Telegram → index.ts(鉴权) → bootstrap(Env) → pipeline.ts(语言检测→限流→会话→agent) → agent.ts(runAgentLoop) → ILLMProvider.chat() ⇄ tools/(lang) → database.ts(D1) → pipeline.ts(持久化→回复)`。
 
 ---
 

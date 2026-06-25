@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { trimHistory } from '../src/session';
+import { trimHistory } from '../src/session-store/trim-history';
 import type { Message } from '../src/types';
 
 // 构造便捷消息
