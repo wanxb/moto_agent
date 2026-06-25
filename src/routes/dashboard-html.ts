@@ -369,18 +369,19 @@ function drawChart(ctx, recs) {
         datasets: [
           { label: t('fuelVolume'), data: recs.map(function(p) { return p.liters; }), backgroundColor: 'rgba(59,130,246,0.6)', borderColor: '#3b82f6', borderWidth: 1, yAxisID: 'y', type: 'bar' },
           { label: t('fuelCost'), data: recs.map(function(p) { return p.cost; }), backgroundColor: 'rgba(16,185,129,0.6)', borderColor: '#10b981', borderWidth: 1, yAxisID: 'y1', type: 'bar' },
-          { label: t('fuelConsumption'), data: recs.map(function(p) { return p.consumption; }), borderColor: '#f59e0b', backgroundColor: 'transparent', borderWidth: 2, tension: 0.3, yAxisID: 'y', type: 'line', pointRadius: 3, pointBackgroundColor: '#f59e0b' },
+          { label: t('fuelConsumption'), data: recs.map(function(p) { return p.consumption; }), borderColor: '#f59e0b', backgroundColor: 'transparent', borderWidth: 2, tension: 0.3, yAxisID: 'y2', type: 'line', pointRadius: 3, pointBackgroundColor: '#f59e0b', pointBorderColor: '#f59e0b', pointBorderWidth: 2, pointStyle: 'line' },
         ],
       },
       options: {
         responsive: true,
         maintainAspectRatio: true,
         interaction: { mode: 'index', intersect: false },
-        plugins: { legend: { labels: { color: '#9ca3af', font: { size: 10 }, boxWidth: 12, padding: 12 } } },
+        plugins: { legend: { labels: { color: '#9ca3af', font: { size: 10 }, boxWidth: 12, padding: 12, usePointStyle: true } } },
         scales: {
           x: { ticks: { color: '#6b7280', maxTicksLimit: 8, font: { size: 10 } } },
           y:  { type: 'linear', position: 'left',  title: { display: true, text: 'L / ' + t('lPer100km'), color: '#9ca3af' }, ticks: { color: '#9ca3af', font: { size: 10 } } },
           y1: { type: 'linear', position: 'right', title: { display: true, text: '¥', color: '#10b981' }, grid: { drawOnChartArea: false }, ticks: { color: '#9ca3af', font: { size: 10 } } },
+          y2: { type: 'linear', position: 'left', display: false, grid: { drawOnChartArea: false } },
         },
       },
     });

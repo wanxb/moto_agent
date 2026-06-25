@@ -77,7 +77,7 @@ async function fuelStats(db: D1Database, url: URL): Promise<{ records: StatsPoin
     : (await getFuelRecordsByDateRange(db, since, '2099-12-31')).sort((a, b) => a.odometer - b.odometer);
 
   const points: StatsPoint[] = [];
-  let totalKm = 0, totalCost = 0, totalLiters = 0;
+  let totalKm = 0, totalCost = 0, totalLiters = 0, consumptionLiters = 0;
 
   for (let i = 0; i < records.length; i++) {
     const cur = records[i];
@@ -85,11 +85,12 @@ async function fuelStats(db: D1Database, url: URL): Promise<{ records: StatsPoin
     const km = prev ? cur.odometer - prev.odometer : null;
     const consumption = (km && km > 0) ? Number((prev!.liters / km * 100).toFixed(2)) : null;
     points.push({ date: cur.date, odometer: cur.odometer, liters: cur.liters, cost: cur.price_total, consumption, distance: km });
-    if (km && km > 0) { totalKm += km; totalCost += cur.price_total; totalLiters += prev!.liters; }
+    if (km && km > 0) { totalKm += km; consumptionLiters += prev!.liters; }
+    totalCost += cur.price_total;
+    totalLiters += cur.liters;
   }
 
-  const avg = totalKm > 0 ? Number((totalLiters / totalKm * 100).toFixed(2)) : 0;
-  // 总里程 = 最新实际里程（最后一条记录的 odometer），而非累计差
+  const avg = totalKm > 0 ? Number((consumptionLiters / totalKm * 100).toFixed(2)) : 0;
   const latestOdometer = records.length > 0 ? records[records.length - 1].odometer : 0;
   return { records: points, avg, totalKm: latestOdometer, totalCost, totalLiters };
 }

@@ -51,10 +51,10 @@ describe('/api/v1/stats', () => {
     const res = await SELF.fetch(apiUrl('/api/v1/stats?x=3&days=365'));
     expect(res.status).toBe(200);
     const body = await res.json() as { records: { consumption: number | null }[]; avg: number; totalKm: number; totalCost: number; totalLiters: number };
-    // 10L/500km=2.0, 9L/500km=1.8 → totalLiters=19, totalKm(累计差)=1000 → avg = 19/1000*100 = 1.9
+    // 总油量=所有记录累加(10+9+8=27)；avg 使用区间内油量(10+9=19)/里程差(500+500=1000)*100=1.9
     // totalKm 返回最新实际里程（odometer=10000），非累计差
     expect(body.totalKm).toBe(10000);
-    expect(body.totalLiters).toBe(19);
+    expect(body.totalLiters).toBe(27);
     expect(body.avg).toBeCloseTo(1.9, 1);
     expect(body.records[0].consumption).toBeNull();
     expect(body.records[1].consumption).toBeCloseTo(2.0, 1);
