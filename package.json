@@ -12,7 +12,9 @@
     "test:watch": "vitest",
     "test:ui": "vitest --ui",
     "eval": "npx tsx scripts/eval.ts",
-    "ingest-knowledge": "npx tsx scripts/ingest-knowledge.ts"
+    "ingest-knowledge": "npx tsx scripts/ingest-knowledge.ts",
+    "test-knowledge": "npx tsx scripts/test-knowledge.ts",
+    "populate-vectorize": "npx tsx scripts/populate-vectorize.ts"
   },
   "dependencies": {
     "grammy": "^1.31.0"

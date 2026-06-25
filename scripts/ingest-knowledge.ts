@@ -20,6 +20,71 @@ import { join, resolve } from 'path';
 import { tmpdir } from 'os';
 import { execSync } from 'child_process';
 
+// ── OCR 后处理 ─────────────────────────────────────────────────────────────
+
+/**
+ * 清理 OCR 文本中的常见噪声：
+ * 1. 去掉中文之间的多余空格（"车 架 号" → "车架号"）
+ * 2. 过滤纯噪声行（乱码比例过高的行）
+ * 3. 合并被割裂的中文短行
+ */
+function cleanOcrText(raw: string): string {
+  // 步骤 1：去掉中文之间的空格（保留中文与英文/数字之间的空格）
+  // 两个 CJK 字之间的空格去掉
+  let text = raw.replace(/([一-鿿㐀-䶿])\s+([一-鿿㐀-䶿])/g, '$1$2');
+  // 重复执行（因为 OCR 可能多个连续空格： "车  架  号"）
+  text = text.replace(/([一-鿿㐀-䶿])\s+([一-鿿㐀-䶿])/g, '$1$2');
+  // CJK 与中文标点之间的空格也去掉
+  text = text.replace(/([一-鿿㐀-䶿　-〿＀-￯])\s+(?=[一-鿿㐀-䶿　-〿＀-￯])/g, '$1');
+
+  // 步骤 2：按行清洗
+  const lines = text.split('\n');
+  const cleaned: string[] = [];
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+
+    // 空行保留（用作分段标记）
+    if (!trimmed) {
+      cleaned.push('');
+      continue;
+    }
+
+    // 计算噪声比例：非中文/英文/数字/常见标点的字符占比
+    const noiseChars = trimmed.replace(/[一-鿿㐀-䶿a-zA-Z0-9　-〿＀-￯\s.,;:!?()（）【】《》、。，；：！？""''%/\-+@#*\[\]]/g, '');
+    const noiseRatio = trimmed.length > 0 ? noiseChars.length / trimmed.length : 0;
+
+    // 如果 > 50% 是噪声且行不短，过滤掉
+    if (noiseRatio > 0.5 && trimmed.length > 5) continue;
+
+    // 纯符号/数字行（无中文）且长度 < 10，可能只是页码或图号
+    const hasChinese = /[一-鿿]/.test(trimmed);
+    if (!hasChinese && trimmed.length < 10) continue;
+
+    cleaned.push(trimmed);
+  }
+
+  // 步骤 3：合并连续短行（OCR 常把一句话断成多行）
+  const merged: string[] = [];
+  for (let i = 0; i < cleaned.length; i++) {
+    if (!cleaned[i]) {
+      // 空行：段落分隔符，保留
+      merged.push(cleaned[i]);
+      continue;
+    }
+
+    const prev = merged[merged.length - 1];
+    if (prev !== undefined && prev !== '' && cleaned[i].length < 40 && prev.length < 60) {
+      // 两行都短 → 合并
+      merged[merged.length - 1] = prev + ' ' + cleaned[i];
+    } else {
+      merged.push(cleaned[i]);
+    }
+  }
+
+  return merged.join('\n');
+}
+
 // ── 文本分块 ─────────────────────────────────────────────────────────────────
 
 interface Chunk {
@@ -29,42 +94,219 @@ interface Chunk {
   chunk_index: number;
 }
 
-/** 将全文按段落分割，合并成 200~1500 字符的 chunks */
-function splitIntoChunks(text: string, maxLen = 1500, minLen = 200): string[] {
-  const parts = text.split(/\n\n+/);  // 空行分段
-  const result: string[] = [];
-  let buffer = '';
+/** 技术参数类文档的关键段落标题，遇这些词优先切段 */
+const SECTION_KEYWORDS = [
+  '技术参数', '保养规范', '维修数据', '安全注意事项',
+  '零件位置', '加注润滑', '故障排除', '主要组件',
+  '轮胎', '制动器', '制动系统', '发动机', '悬挂系统',
+  '电气系统', '车架', '外观', '操作',
+  '蓄电池', '火花塞', '机油', '齿轮油',
+  '保险丝', '灯泡', '指示灯',
+];
 
+/** 将 OCR 后的文本分割为语义段落，再合并成 300~800 字符的 chunks（更小粒度） */
+function splitIntoChunks(text: string, maxLen = 800, minLen = 200): string[] {
+  // 先用空行切段落
+  let parts = text.split(/\n\n+/).filter(p => p.trim());
+
+  // 再对每个段落按关键词二次切割，长段暴力切
+  const segments: string[] = [];
   for (const part of parts) {
     const trimmed = part.trim();
     if (!trimmed) continue;
 
-    if (buffer.length + trimmed.length + 2 > maxLen && buffer.length >= minLen) {
-      result.push(buffer.trim());
-      buffer = trimmed;
+    if (trimmed.length > maxLen) {
+      // 先试关键词切分
+      const byKeywords = splitByKeywords(trimmed);
+      if (byKeywords.length > 1) {
+        segments.push(...byKeywords);
+      } else {
+        // 关键词没切动 → 暴力切
+        segments.push(...forceSplitLongSegment(trimmed, maxLen));
+      }
     } else {
-      buffer += (buffer ? '\n\n' : '') + trimmed;
+      segments.push(trimmed);
     }
   }
 
-  if (buffer.trim().length >= minLen) result.push(buffer.trim());
+  // 合并太短的段
+  const result: string[] = [];
+  let buffer = '';
 
-  // 如果太短（整篇少于 minLen），直接整篇出
-  if (result.length === 0 && text.trim().length > 0) {
-    result.push(text.trim());
+  for (const seg of segments) {
+    if (!seg) continue;
+
+    if (buffer.length + seg.length + 2 > maxLen && buffer.length >= minLen) {
+      result.push(buffer.trim());
+      buffer = seg;
+    } else if (buffer.length + seg.length + 2 > maxLen * 1.5 && buffer.length >= minLen) {
+      if (buffer.length >= minLen) result.push(buffer.trim());
+      buffer = seg;
+    } else {
+      buffer += (buffer ? '\n\n' : '') + seg;
+    }
+  }
+
+  if (buffer.trim().length >= minLen) {
+    result.push(buffer.trim());
+  } else if (result.length > 0 && buffer.trim().length > 0) {
+    const last = result.pop()!;
+    result.push(last + '\n\n' + buffer.trim());
+  } else if (buffer.trim().length > 0) {
+    result.push(buffer.trim());
   }
 
   return result;
 }
 
-/** 文档 → chunks：调用 splitIntoChunks 并附上文件信息 */
+/** 按关键技术词分割长文本段（OCR 文本缺少换行结构，支持行内匹配） */
+function splitByKeywords(text: string): string[] {
+  // 在句号/分号/换行后找关键词
+  const sepPattern = new RegExp(
+    `(?:[。；!！?？\\n]\\s*|^)(?:@\\s*|\\d+[.、]\\s*)?(${SECTION_KEYWORDS.join('|')})`,
+    'g'
+  );
+
+  const parts: string[] = [];
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+
+  while ((match = sepPattern.exec(text)) !== null) {
+    const preceding = text.slice(lastIndex, match.index + (match[0].startsWith(match[1]!) ? 0 : match[0].indexOf(match[1]!))).trim();
+    if (preceding.length > 30) parts.push(preceding);
+    lastIndex = match.index + match[0].indexOf(match[1]!) + (match[1]?.length ?? 0);
+  }
+
+  // 最后一段
+  const trailing = text.slice(lastIndex).trim();
+  if (trailing.length > 30) parts.push(trailing);
+
+  if (parts.length <= 1) return [text.trim()];
+
+  // 合并太短的段
+  const merged: string[] = [];
+  for (const part of parts) {
+    if (part.length < 60 && merged.length > 0) {
+      merged[merged.length - 1] += '\n' + part;
+    } else {
+      merged.push(part);
+    }
+  }
+  return merged;
+}
+
+/** 如果关键词分割没效果，用句号/分号/换行暴力切长段 */
+function forceSplitLongSegment(text: string, maxLen: number): string[] {
+  if (text.length <= maxLen) return [text];
+
+  const splits = text.split(/(?<=[。；!！?？\n])/);
+  const chunks: string[] = [];
+  let buffer = '';
+
+  for (const s of splits) {
+    if (!s.trim()) continue;
+    if (buffer.length + s.length > maxLen && buffer.length >= 100) {
+      chunks.push(buffer.trim());
+      buffer = s;
+    } else {
+      buffer += s;
+    }
+  }
+  if (buffer.trim()) chunks.push(buffer.trim());
+
+  // 一段都没切开 → 暴力等分
+  if (chunks.length <= 1 && chunks[0] && chunks[0].length > maxLen * 1.3) {
+    const half = Math.ceil(chunks[0].length / 2);
+    return [chunks[0].slice(0, half).trim(), chunks[0].slice(half).trim()];
+  }
+
+  return chunks;
+}
+
+/** 文档 → chunks：清洗 → 分块 → 附文件信息 */
 function docToChunks(text: string, fileName: string): Chunk[] {
-  return splitIntoChunks(text).map((t, i) => ({
+  const cleaned = cleanOcrText(text);
+  const baseTitle = fileName.replace(/\.(pdf|txt)$/i, '');
+  return splitIntoChunks(cleaned).map((t, i) => ({
     text: t,
     source_doc: fileName,
-    section_title: fileName.replace(/\.(pdf|txt)$/i, ''),
+    section_title: baseTitle,
     chunk_index: i,
   }));
+}
+
+// ── 跨文档去重 ──────────────────────────────────────────────────────────────
+
+/** 用字符 4-gram Jaccard 相似度检测两个文本是否近义重复（仅对比中文部分，抗 OCR 噪声） */
+function textSimilarity(a: string, b: string): number {
+  // 只提取中文字符，忽略 OCR 噪声和字母数字
+  const cjkOnly = (s: string) => (s.match(/[一-鿿㐀-䶿]/g) || []).join('').slice(0, 3000);
+  const na = cjkOnly(a);
+  const nb = cjkOnly(b);
+
+  if (na.length < 20 || nb.length < 20) return 0; // 太短不比较
+
+  const gramsA = new Set<string>();
+  const gramsB = new Set<string>();
+
+  for (let i = 0; i < na.length - 3; i++) gramsA.add(na.slice(i, i + 4));
+  for (let i = 0; i < nb.length - 3; i++) gramsB.add(nb.slice(i, i + 4));
+
+  if (gramsA.size === 0 && gramsB.size === 0) return 1;
+  if (gramsA.size === 0 || gramsB.size === 0) return 0;
+
+  let intersection = 0;
+  for (const g of gramsA) {
+    if (gramsB.has(g)) intersection++;
+  }
+
+  return intersection / (gramsA.size + gramsB.size - intersection);
+}
+
+/** 衡量 chunk 质量得分（越高越好），用于去重时保留更好的 */
+function chunkQuality(text: string): number {
+  const norm = text.replace(/\s+/g, '');
+  // 中文比例高 + 总字符多 = 质量好
+  const cjkCount = (norm.match(/[一-鿿㐀-䶿]/g) || []).length;
+  const cjkRatio = norm.length > 0 ? cjkCount / norm.length : 0;
+  // 含数字和技术参数加分
+  const digits = (norm.match(/\d+/g) || []).length;
+  // 噪声字符（乱码中常见的非中英文字符）占比低加分
+  const noise = (norm.replace(/[一-鿿a-zA-Z0-9]/g, '').length);
+  const noisePenalty = norm.length > 0 ? noise / norm.length : 0;
+
+  return cjkRatio * 10 + Math.min(digits, 20) * 0.5 - noisePenalty * 5 + norm.length * 0.01;
+}
+
+/** 对跨文档的 chunks 做近似去重，保留质量更高的那条 */
+function dedupChunks(chunks: Chunk[], threshold = 0.35): { chunks: Chunk[]; removed: number } {
+  const kept: Chunk[] = [];
+  let removed = 0;
+
+  for (const chunk of chunks) {
+    let isDuplicate = false;
+    for (let i = 0; i < kept.length; i++) {
+      const existing = kept[i];
+      const sim = textSimilarity(chunk.text, existing.text);
+      if (sim >= threshold) {
+        // 发现近似重复，保留质量更好的
+        const existingScore = chunkQuality(existing.text);
+        const newScore = chunkQuality(chunk.text);
+        if (newScore > existingScore) {
+          // 新的更好，替换
+          kept[i] = chunk;
+        }
+        isDuplicate = true;
+        removed++;
+        break;
+      }
+    }
+    if (!isDuplicate) {
+      kept.push(chunk);
+    }
+  }
+
+  return { chunks: kept, removed };
 }
 
 // ── PDF 文字提取 + OCR 兜底 ────────────────────────────────────────────────
@@ -217,22 +459,30 @@ async function main(): Promise<void> {
 
   console.log(`\n共 ${allChunks.length} 个 chunks`);
 
-  // ── 保存 JSON ──────────────────────────────────────────────────────────
+  // ── 跨文档去重 ──────────────────────────────────────────────────────────
+  const { chunks: deduped, removed } = dedupChunks(allChunks);
+  if (removed > 0) {
+    console.log(`🔁 去重：移除 ${removed} 个近似重复 chunk（保留 ${deduped.length} 个）`);
+  }
+
+  // ── 保存 JSON（含 _id，与 Vectorize 元数据和 SQL 对齐） ────────────────
   const jsonPath = join(knowledgeDir, 'chunks.json');
-  writeFileSync(jsonPath, JSON.stringify(allChunks, null, 2));
+  const jsonOutput = deduped.map((chunk, idx) => ({ _id: idx + 1, ...chunk }));
+  writeFileSync(jsonPath, JSON.stringify(jsonOutput, null, 2));
   console.log(`\n✅ JSON 已保存: ${jsonPath}`);
 
-  // ── 导出 SQL ──────────────────────────────────────────────────────────
+  // ── 导出 SQL（用显式 ID，与 Vectorize 元数据对齐） ──────────────────────────
   const sqlPath = join(knowledgeDir, 'import.sql');
   const sqlLines: string[] = [];
-  for (const chunk of allChunks) {
+  deduped.forEach((chunk, idx) => {
+    const id = idx + 1; // 从 1 开始
     const escaped = chunk.text.replace(/'/g, "''");
     const src = chunk.source_doc.replace(/'/g, "''");
     const sec = chunk.section_title.replace(/'/g, "''");
     sqlLines.push(
-      `INSERT INTO knowledge_chunks (chunk_text, source_doc, section_title, chunk_index) VALUES ('${escaped}', '${src}', '${sec}', ${chunk.chunk_index});`
+      `INSERT INTO knowledge_chunks (id, chunk_text, source_doc, section_title, chunk_index) VALUES (${id}, '${escaped}', '${src}', '${sec}', ${chunk.chunk_index});`
     );
-  }
+  });
   // 分批写入（D1 单条限制）
   const batchSize = 100;
   for (let i = 0; i < sqlLines.length; i += batchSize) {

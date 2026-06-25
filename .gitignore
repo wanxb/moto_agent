@@ -33,3 +33,9 @@ canvas-test.png
 
 # Backup
 knowledge_bak/
+
+# Knowledge base cache (generated from API calls)
+knowledge/embeddings.json
+
+# Temp CI/sandbox configs
+sandbox/
