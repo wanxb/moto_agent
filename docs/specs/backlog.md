@@ -58,17 +58,9 @@
 
 ---
 
-## Web Dashboard（Phase 3）
+## Web Dashboard（Phase 3）→ 已升级为 [spec 016](016-multi-user-pwa/)
 
-- **阶段/优先级**：Phase 3 · 🟡 概览
-- **价值**：可视化油耗趋势/费用分布，服务非技术用户（[Persona B](../product/personas.md#persona-b省心骑手非技术用户phase-3-目标)）。
-- **范围**：只读图表面板（油耗趋势、费用、月度对比）。
-- **设计方向**：
-  - **Cloudflare Pages** 承载前端，复用同生态，读 D1。
-  - 鉴权：Telegram Login Widget 或 Workers 签发 JWT（**先写 ADR**）。
-  - 复用 Tool/数据层（接口层解耦原则），不重写业务逻辑。
-- **依赖**：多用户数据隔离（[security §6](../engineering/security.md)）。
-- **影响**：架构新增容器、新 ADR、[security](../engineering/security.md) 多用户设计。
+> 已从概览升级为完整规格。详见 [`016-multi-user-pwa/`](016-multi-user-pwa/)。Dashboard 作为 PWA 的页面之一内嵌在多用户系统中，鉴权使用邮箱 Magic Link + Session，不另做独立的 Dashboard 鉴权。
 
 ---
 
