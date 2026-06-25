@@ -84,9 +84,11 @@ function createBot(env: Env): Bot {
       const lang = await resolveLang(env, ctx.chat!.id.toString(), ctx.from?.language_code);
       return ctx.reply(t('dashboard.no_url', lang));
     }
-    // dashboard 用用户当前语言展示链接
     const lang = await resolveLang(env, ctx.chat!.id.toString(), ctx.from?.language_code);
-    return ctx.reply(t('dashboard.link', lang, url), { parse_mode: 'HTML' });
+    // 将用户语言偏好以 ?lang= 参数传给 Dashboard HTML
+    const langParam = lang === 'en' ? '?lang=en' : '';
+    const link = url.includes('?') ? `${url}&lang=${lang}` : `${url}${langParam}`;
+    return ctx.reply(t('dashboard.link', lang, link), { parse_mode: 'HTML' });
   });
 
   bot.on('message:text', async ctx => {
