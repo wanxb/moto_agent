@@ -69,6 +69,9 @@ export class LogFuelTool implements Tool {
       if (distance > 0) {
         const consumption = (prev.liters / distance * 100).toFixed(2);
         msg += '\n' + t('fuel.consumption', lang, consumption, fmtNumber(distance, lang));
+      } else if (distance < 0) {
+        // odometer 小于上一条记录 → 不阻断，但提醒
+        msg += '\n\n⚠️ ' + t('fuel.odometer_anomaly', lang, fmtNumber(prev.odometer, lang));
       }
     } else {
       msg += '\n' + t('fuel.first_record', lang);

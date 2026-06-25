@@ -51,6 +51,7 @@ export const zh: Record<string, string> = {
   'fuel.fueling': '⛽ 加油：{0} L × ¥{1}/L = ¥{2}',
   'fuel.first_record': '📊 首次记录，下次加油后将显示油耗',
   'fuel.consumption': '📊 本次油耗：{0} L/100km（距上次 {1} km）',
+  'fuel.odometer_anomaly': '里程 {0} km 比上一条记录还低，是否里程录入有误？请确认。',
   'fuel.stats_title': '📊 {0}',
   'fuel.stats_title_default': '📊 油耗统计',
   'fuel.only_one': '只有 1 条记录，需要至少 2 条才能计算区间油耗。',

@@ -4,7 +4,7 @@ import type { Tool } from './interface';
 import type { Lang } from '../i18n/types';
 import { t, fmtNumber } from '../i18n';
 import { resolveVehicle, ambiguousMsg } from './_helpers';
-import { insertMileageRecord } from '../database';
+import { insertMileageRecord, getLastFuelRecord } from '../database';
 
 export class LogMileageTool implements Tool {
   readonly name = 'log_mileage';
@@ -31,6 +31,14 @@ export class LogMileageTool implements Tool {
 
     await insertMileageRecord(db, { date, odometer, note, vehicle_id: vehicleId });
     const tag = vehicleName ? t('fuel.vehicle_tag', lang, vehicleName) : '';
-    return t('mileage.recorded', lang, tag, fmtNumber(odometer, lang), date);
+    let msg = t('mileage.recorded', lang, tag, fmtNumber(odometer, lang), date);
+
+    // odometer 异常检查
+    const prev = await getLastFuelRecord(db, vehicleId);
+    if (prev && odometer < prev.odometer) {
+      msg += '\n\n⚠️ ' + t('fuel.odometer_anomaly', lang, fmtNumber(prev.odometer, lang));
+    }
+
+    return msg;
   }
 }

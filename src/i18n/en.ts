@@ -51,6 +51,7 @@ export const en: Record<string, string> = {
   'fuel.fueling': '⛽ Fuel: {0} L × {1}/L = {2}',
   'fuel.first_record': '📊 First record — fuel consumption will show after next fill-up.',
   'fuel.consumption': '📊 Fuel consumption: {0} L/100km ({1} km since last)',
+  'fuel.odometer_anomaly': 'Odometer {0} km is lower than the previous record — is this correct? Please verify.',
   'fuel.stats_title': '📊 {0}',
   'fuel.stats_title_default': '📊 Fuel Statistics',
   'fuel.only_one': 'Only 1 record — need at least 2 to calculate consumption.',
