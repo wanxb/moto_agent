@@ -24,6 +24,8 @@ export interface ILLMProvider {
 export interface ISessionStore {
   get(userId: string): Promise<Message[]>;
   set(userId: string, messages: Message[], ttl: number): Promise<void>;
+  /** 清空指定用户的会话历史 */
+  clear(userId: string): Promise<void>;
 }
 
 // ── 语音转文字 ───────────────────────────────────────────────────────────────

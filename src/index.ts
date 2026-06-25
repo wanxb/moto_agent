@@ -1,7 +1,7 @@
 import { Bot, webhookCallback } from 'grammy';
 import { Env } from './types';
 import type { Lang } from './i18n/types';
-import { t, setLang } from './i18n';
+import { t, setLang, getLang, detectLang } from './i18n';
 import { runScheduled } from './scheduled';
 import { transcribe } from './stt';
 import { bootstrap } from './bootstrap';
@@ -16,6 +16,13 @@ function makeWelcome(lang: Lang): string {
 }
 function makeHelp(lang: Lang): string {
   return t('help.title', lang) + t('help.body', lang);
+}
+
+/** 从 KV 读取语言偏好，KV 未设置时回退到 Telegram language_code，再回退到 zh */
+async function resolveLang(env: Env, chatId: string, languageCode?: string): Promise<Lang> {
+  const stored = await getLang(env.SESSION_KV, chatId);
+  if (stored) return stored;
+  return detectLang(languageCode);
 }
 
 function createBot(env: Env): Bot {
@@ -34,23 +41,25 @@ function createBot(env: Env): Bot {
   });
 
   bot.command('start', async ctx => {
-    const lang: Lang = ctx.from?.language_code?.startsWith('zh') ? 'zh' : 'en';
+    const lang = await resolveLang(env, ctx.chat!.id.toString(), ctx.from?.language_code);
     await ctx.reply(makeWelcome(lang));
   });
   bot.command('help', async ctx => {
-    const lang: Lang = ctx.from?.language_code?.startsWith('zh') ? 'zh' : 'en';
+    const lang = await resolveLang(env, ctx.chat!.id.toString(), ctx.from?.language_code);
     await ctx.reply(makeHelp(lang));
   });
 
   bot.command('last', async ctx => {
     const app = bootstrap(env);
     const adapter = new TelegramAdapter(ctx, env);
-    await app.run(adapter, { text: '获取最近一次加油记录' });
+    const lang = await resolveLang(env, ctx.chat!.id.toString(), ctx.from?.language_code);
+    await app.run(adapter, { text: t('shortcut.last', lang) });
   });
   bot.command('stats', async ctx => {
     const app = bootstrap(env);
     const adapter = new TelegramAdapter(ctx, env);
-    await app.run(adapter, { text: '查询本月油耗统计' });
+    const lang = await resolveLang(env, ctx.chat!.id.toString(), ctx.from?.language_code);
+    await app.run(adapter, { text: t('shortcut.stats', lang) });
   });
 
   // spec 010: 语言切换命令
@@ -59,20 +68,25 @@ function createBot(env: Env): Bot {
     const arg = ctx.message?.text?.split(/\s+/)[1]?.toLowerCase();
     if (arg === 'zh' || arg === 'en') {
       await setLang(env.SESSION_KV, chatId, arg);
+      // 切换语言时清空会话历史，防止旧历史干扰新语言
+      const app = bootstrap(env);
+      await app.session.clear(chatId);
       await ctx.reply(t('lang.switched', arg, arg === 'zh' ? '中文' : 'English'));
     } else {
-      const lang: Lang = ctx.from?.language_code?.startsWith('zh') ? 'zh' : 'en';
+      const lang = await resolveLang(env, chatId, ctx.from?.language_code);
       await ctx.reply(t('lang.unknown', lang));
     }
   });
 
-  bot.command('dashboard', ctx => {
+  bot.command('dashboard', async ctx => {
     const url = env.DASHBOARD_URL;
     if (!url) {
-      const lang: Lang = ctx.from?.language_code?.startsWith('zh') ? 'zh' : 'en';
+      const lang = await resolveLang(env, ctx.chat!.id.toString(), ctx.from?.language_code);
       return ctx.reply(t('dashboard.no_url', lang));
     }
-    return ctx.reply(t('dashboard.link', 'zh', url), { parse_mode: 'HTML' });
+    // dashboard 用用户当前语言展示链接
+    const lang = await resolveLang(env, ctx.chat!.id.toString(), ctx.from?.language_code);
+    return ctx.reply(t('dashboard.link', lang, url), { parse_mode: 'HTML' });
   });
 
   bot.on('message:text', async ctx => {
@@ -85,7 +99,7 @@ function createBot(env: Env): Bot {
   bot.on('message:voice', async ctx => {
     const chatId = ctx.chat.id.toString();
     const voice = ctx.message.voice;
-    const lang: Lang = ctx.from?.language_code?.startsWith('zh') ? 'zh' : 'en';
+    const lang = await resolveLang(env, chatId, ctx.from?.language_code);
 
     if (voice.duration > MAX_VOICE_SECONDS) {
       await ctx.reply(t('voice.too_long', lang, String(voice.duration), String(MAX_VOICE_SECONDS)));
@@ -172,14 +186,16 @@ export default {
       }
 
       const bot = createBot(env);
-      const handle = webhookCallback(bot, 'cloudflare-mod');
+      // 超时 25 秒（部分查询需多次 LLM 调用 >10s）
+      const handle = webhookCallback(bot, 'cloudflare-mod', 'throw', 25_000);
 
-      // grammY webhook 内未捕获的错误兜底（否则 Workers 返回 1101）
+      // grammY webhook 内未捕获的错误兜底
       try {
         return await handle(request);
       } catch (e) {
-        console.error('[webhook] grammY error:', e instanceof Error ? e.stack : String(e));
-        return new Response('OK', { status: 200 }); // 不回 500 避免 Telegram 重试风暴
+        const msg = e instanceof Error ? e.stack : String(e);
+        console.error('[webhook] grammY error:', msg);
+        return new Response(msg, { status: 200 });
       }
     } catch (e) {
       console.error('[worker] unhandled error:', e instanceof Error ? e.stack : String(e));

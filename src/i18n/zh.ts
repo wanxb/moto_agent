@@ -124,6 +124,10 @@ export const zh: Record<string, string> = {
   'lang.switched': '✅ 语言已切换为{0}。',
   'lang.unknown': '支持的语言：zh（中文）、en（English）。示例：/lang en',
 
+  // ── 快捷命令 ──
+  'shortcut.last': '获取最近一次加油记录',
+  'shortcut.stats': '查询本月油耗统计',
+
   // ── 知识库 RAG（spec 015）──
   'knowledge.empty_query': '请输入要搜索的问题。',
   'knowledge.embed_failed': '知识库检索失败（向量化错误），请稍后重试。',

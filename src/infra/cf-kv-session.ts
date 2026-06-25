@@ -16,4 +16,8 @@ export class CFKVSession implements ISessionStore {
   async set(userId: string, messages: Message[], ttl: number): Promise<void> {
     await this.kv.put(this.key(userId), JSON.stringify(messages), { expirationTtl: ttl });
   }
+
+  async clear(userId: string): Promise<void> {
+    await this.kv.delete(this.key(userId));
+  }
 }
