@@ -155,13 +155,12 @@
 
 > 表结构迁移（`0009_multi_user.sql`）见 T1.1，本节只做**数据**迁移脚本。
 
-- [ ] **T11.1** 创建 `scripts/migrate-single-user.ts`：
-  - 读 `ALLOWED_CHAT_ID` → 在 users 表 `INSERT ... ON CONFLICT DO NOTHING` 创建管理员
-  - 将 `vehicles`/三张记录表/`reminders` 中 `user_id IS NULL` 的行回填管理员 `user_id`
-  - **`reminders.chat_id` 保持原值不动**（cron 推送目标），只填新列 `user_id`
-  - 幂等（`WHERE user_id IS NULL` 重跑不再命中）
-- [ ] **T11.2** 测试迁移脚本：空库 → 正常；有数据 → 数据正确归属
-  - 验证：迁移后所有车辆/记录/提醒都有正确 `user_id`，且 `reminders.chat_id` 未被改写
+- [x] **T11.1** 迁移逻辑 `src/migrate.ts`（`migrateSingleUser(db, adminChatId)`，可测）+ CLI `scripts/migrate-single-user.ts`（wrangler execSync，`--local/--remote`，chatId 取自参数或 `.dev.vars`）：
+  - `INSERT ... ON CONFLICT(telegram_id) DO NOTHING` 创建管理员
+  - `vehicles`/三张记录表/`reminders` 中 `user_id IS NULL` 回填管理员 `user_id`
+  - **`reminders.chat_id` 原值不动**（cron 推送目标），只填 `user_id`
+  - 幂等（`WHERE user_id IS NULL` 重跑不命中）
+- [x] **T11.2** `test/migrate.test.ts`（3 用例）：回填 + chat_id 保留 / 幂等重跑全 0 不重复建号 / 不覆盖已有 user_id
 
 ### T12 测试覆盖
 
