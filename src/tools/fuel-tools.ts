@@ -30,13 +30,13 @@ export class LogFuelTool implements Tool {
   } as const;
   readonly required = ['date', 'odometer', 'liters', 'price_total'];
 
-  async execute(input: Record<string, unknown>, db: D1Database, lang: Lang): Promise<string> {
+  async execute(input: Record<string, unknown>, db: D1Database, lang: Lang, userId?: number): Promise<string> {
     let { date, odometer, liters, price_total, fuel_type, note, vehicle, confirm } = input as {
       date: string; odometer: number; liters: number; price_total: number;
       fuel_type?: string; note?: string; vehicle?: string; confirm?: boolean;
     };
 
-    const r = await resolveVehicle(db, vehicle);
+    const r = await resolveVehicle(db, vehicle, userId);
     if (r.status === 'not_found') return t('general.vehicle_not_found_add', lang, r.name);
     if (r.status === 'ambiguous') return ambiguousMsg(r.vehicles, t('ambiguous.record', lang), lang);
 
@@ -50,7 +50,7 @@ export class LogFuelTool implements Tool {
 
     // spec 017: 写入前去重软拦截——同车同日里程相近视为疑似重复，未确认则先反问不落库
     if (confirm !== true) {
-      const sameDay = await findFuelRecords(db, { vehicleId, date });
+      const sameDay = await findFuelRecords(db, { vehicleId, date, userId });
       const dup = sameDay.find(rec => Math.abs(rec.odometer - odometer) <= FUEL_DUP_KM_THRESHOLD);
       if (dup) {
         return t('dup.fuel_warn', lang, date, fmtNumber(dup.odometer, lang),
@@ -58,8 +58,8 @@ export class LogFuelTool implements Tool {
       }
     }
 
-    const prev = await getLastFuelRecord(db, vehicleId);
-    await insertFuelRecord(db, { date, odometer, liters, price_total, fuel_type, note, vehicle_id: vehicleId });
+    const prev = await getLastFuelRecord(db, vehicleId, userId);
+    await insertFuelRecord(db, { date, odometer, liters, price_total, fuel_type, note, vehicle_id: vehicleId, user_id: userId });
 
     // spec 011: 自动检测油号变化
     if (r.status === 'resolved') {
@@ -107,12 +107,12 @@ export class QueryStatsTool implements Tool {
   } as const;
   readonly required = ['mode'];
 
-  async execute(input: Record<string, unknown>, db: D1Database, lang: Lang): Promise<string> {
+  async execute(input: Record<string, unknown>, db: D1Database, lang: Lang, userId?: number): Promise<string> {
     const { mode, count, start_date, end_date, vehicle } = input as {
       mode: 'recent' | 'date_range'; count?: number; start_date?: string; end_date?: string; vehicle?: string;
     };
 
-    const r = await resolveVehicle(db, vehicle);
+    const r = await resolveVehicle(db, vehicle, userId);
     if (r.status === 'not_found') return t('general.vehicle_not_found', lang, r.name);
     if (r.status === 'ambiguous') return ambiguousMsg(r.vehicles, t('ambiguous.query', lang), lang);
 
@@ -120,8 +120,8 @@ export class QueryStatsTool implements Tool {
     const vehicleName = r.status === 'resolved' ? r.vehicle.name : undefined;
 
     const records = mode === 'recent'
-      ? (await getRecentFuelRecords(db, (count ?? 5) + 1, vehicleId)).reverse()
-      : await getFuelRecordsByDateRange(db, start_date!, end_date!, vehicleId);
+      ? (await getRecentFuelRecords(db, (count ?? 5) + 1, vehicleId, userId)).reverse()
+      : await getFuelRecordsByDateRange(db, start_date!, end_date!, vehicleId, userId);
 
     if (records.length === 0) return t('general.no_fuel_records', lang);
     if (records.length === 1) return t('fuel.only_one', lang);
@@ -168,17 +168,17 @@ export class GetLastRecordTool implements Tool {
   } as const;
   readonly required: string[] = [];
 
-  async execute(input: Record<string, unknown>, db: D1Database, lang: Lang): Promise<string> {
+  async execute(input: Record<string, unknown>, db: D1Database, lang: Lang, userId?: number): Promise<string> {
     const { vehicle } = input as { vehicle?: string };
 
-    const r = await resolveVehicle(db, vehicle);
+    const r = await resolveVehicle(db, vehicle, userId);
     if (r.status === 'not_found') return t('general.vehicle_not_found', lang, r.name);
     if (r.status === 'ambiguous') return ambiguousMsg(r.vehicles, t('ambiguous.query', lang), lang);
 
     const vehicleId = r.status === 'resolved' ? r.vehicle.id : undefined;
     const vehicleName = r.status === 'resolved' ? r.vehicle.name : undefined;
 
-    const rec = await getLastFuelRecord(db, vehicleId);
+    const rec = await getLastFuelRecord(db, vehicleId, userId);
     if (!rec) return t('general.no_fuel_records', lang);
     const pricePerL = (rec.price_total / rec.liters).toFixed(2);
     const tag = vehicleName ? t('fuel.vehicle_tag', lang, vehicleName) : '';
@@ -209,20 +209,20 @@ export class UpdateLastFuelTool implements Tool {
   } as const;
   readonly required: string[] = [];
 
-  async execute(input: Record<string, unknown>, db: D1Database, lang: Lang): Promise<string> {
+  async execute(input: Record<string, unknown>, db: D1Database, lang: Lang, userId?: number): Promise<string> {
     const { date, odometer, liters, price_total, fuel_type, note, vehicle } = input as {
       date?: string; odometer?: number; liters?: number; price_total?: number;
       fuel_type?: string; note?: string; vehicle?: string;
     };
 
-    const r = await resolveVehicle(db, vehicle);
+    const r = await resolveVehicle(db, vehicle, userId);
     if (r.status === 'not_found') return t('general.vehicle_not_found', lang, r.name);
     if (r.status === 'ambiguous') return ambiguousMsg(r.vehicles, t('ambiguous.edit', lang), lang);
 
     const vehicleId = r.status === 'resolved' ? r.vehicle.id : undefined;
     const vehicleName = r.status === 'resolved' ? r.vehicle.name : undefined;
 
-    const last = await getLastFuelRecord(db, vehicleId);
+    const last = await getLastFuelRecord(db, vehicleId, userId);
     if (!last) return t('general.no_fuel_records_edit', lang);
 
     const fields = { date, odometer, liters, price_total, fuel_type, note };
@@ -254,10 +254,10 @@ export class DeleteLastFuelTool implements Tool {
   } as const;
   readonly required: string[] = [];
 
-  async execute(input: Record<string, unknown>, db: D1Database, lang: Lang): Promise<string> {
+  async execute(input: Record<string, unknown>, db: D1Database, lang: Lang, userId?: number): Promise<string> {
     const { vehicle, confirm } = input as { vehicle?: string; confirm?: boolean };
 
-    const r = await resolveVehicle(db, vehicle);
+    const r = await resolveVehicle(db, vehicle, userId);
     if (r.status === 'not_found') return t('general.vehicle_not_found', lang, r.name);
     if (r.status === 'ambiguous') return ambiguousMsg(r.vehicles, t('ambiguous.delete', lang), lang);
 
@@ -265,7 +265,7 @@ export class DeleteLastFuelTool implements Tool {
     const vehicleName = r.status === 'resolved' ? r.vehicle.name : undefined;
     const tag = vehicleName ? t('fuel.vehicle_tag', lang, vehicleName) : '';
 
-    const last = await getLastFuelRecord(db, vehicleId);
+    const last = await getLastFuelRecord(db, vehicleId, userId);
     if (!last) return t('general.no_fuel_records_delete', lang);
 
     // spec 017: 未确认先回显预览，不删
@@ -292,12 +292,12 @@ export class DeleteFuelTool implements Tool {
   } as const;
   readonly required: string[] = [];
 
-  async execute(input: Record<string, unknown>, db: D1Database, lang: Lang): Promise<string> {
+  async execute(input: Record<string, unknown>, db: D1Database, lang: Lang, userId?: number): Promise<string> {
     const { date, odometer, vehicle, confirm } = input as {
       date?: string; odometer?: number; vehicle?: string; confirm?: boolean;
     };
 
-    const r = await resolveVehicle(db, vehicle);
+    const r = await resolveVehicle(db, vehicle, userId);
     if (r.status === 'not_found') return t('general.vehicle_not_found', lang, r.name);
     if (r.status === 'ambiguous') return ambiguousMsg(r.vehicles, t('ambiguous.delete', lang), lang);
 
@@ -305,7 +305,7 @@ export class DeleteFuelTool implements Tool {
     const vehicleName = r.status === 'resolved' ? r.vehicle.name : undefined;
     const tag = vehicleName ? t('fuel.vehicle_tag', lang, vehicleName) : '';
 
-    const matches = await findFuelRecords(db, { vehicleId, date, odometer });
+    const matches = await findFuelRecords(db, { vehicleId, date, odometer, userId });
     if (matches.length === 0) return t('delete.fuel_not_found', lang);
     if (matches.length > 1) {
       const lines = matches.map(m => fuelLine(m, lang));

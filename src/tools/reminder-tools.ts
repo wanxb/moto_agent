@@ -26,13 +26,13 @@ export class SetReminderTool implements Tool {
   } as const;
   readonly required = ['type', 'mode'];
 
-  async execute(input: Record<string, unknown>, db: D1Database, lang: Lang): Promise<string> {
+  async execute(input: Record<string, unknown>, db: D1Database, lang: Lang, userId?: number): Promise<string> {
     const { type, mode, interval_km, trigger_odometer, trigger_date, note, vehicle } = input as {
       type: string; mode: 'mileage' | 'date';
       interval_km?: number; trigger_odometer?: number; trigger_date?: string;
       note?: string; vehicle?: string;
     };
-    const r = await resolveVehicle(db, vehicle);
+    const r = await resolveVehicle(db, vehicle, userId);
     if (r.status === 'not_found') return t('general.vehicle_not_found_add', lang, r.name);
     if (r.status === 'ambiguous') return ambiguousMsg(r.vehicles, t('ambiguous.set', lang), lang);
 
@@ -46,14 +46,14 @@ export class SetReminderTool implements Tool {
       const intervalToStore = (trigger_odometer == null && interval_km != null) ? interval_km : null;
       if (target == null) {
         if (interval_km == null) return t('reminder.mileage_need', lang);
-        const lastMaint = await getLastMaintenanceByType(db, type, vehicleId);
-        const basis = lastMaint?.odometer ?? await getLatestOdometer(db, vehicleId);
+        const lastMaint = await getLastMaintenanceByType(db, type, vehicleId, userId);
+        const basis = lastMaint?.odometer ?? await getLatestOdometer(db, vehicleId, userId);
         if (basis == null) return t('reminder.no_basis', lang);
         target = basis + interval_km;
         basisNote = t('reminder.basis_note', lang, fmtNumber(basis, lang), String(interval_km));
       }
-      const replaced = await cancelReminders(db, { type, vehicleId });
-      await insertReminder(db, { vehicle_id: vehicleId, type, mode: 'mileage', trigger_odometer: target, interval_km: intervalToStore, note });
+      const replaced = await cancelReminders(db, { type, vehicleId, userId });
+      await insertReminder(db, { vehicle_id: vehicleId, type, mode: 'mileage', trigger_odometer: target, interval_km: intervalToStore, note, user_id: userId });
       const renewNote = intervalToStore != null ? t('reminder.renew_note', lang, String(intervalToStore)) : '';
       const prefix = t(replaced > 0 ? 'reminder.updated_prefix' : 'reminder.set_prefix', lang, tag);
       return t('reminder.mileage_set', lang, prefix, type, fmtNumber(target, lang), basisNote, renewNote);
@@ -62,7 +62,7 @@ export class SetReminderTool implements Tool {
     // date mode
     if (!trigger_date) return t('reminder.date_need', lang);
     const replaced = await cancelReminders(db, { type, vehicleId });
-    await insertReminder(db, { vehicle_id: vehicleId, type, mode: 'date', trigger_date, note });
+    await insertReminder(db, { vehicle_id: vehicleId, type, mode: 'date', trigger_date, note, user_id: userId });
     const prefix = t(replaced > 0 ? 'reminder.updated_prefix' : 'reminder.set_prefix', lang, tag);
     return t('reminder.date_set', lang, prefix, type, trigger_date);
   }
@@ -79,16 +79,16 @@ export class ListRemindersTool implements Tool {
   } as const;
   readonly required: string[] = [];
 
-  async execute(input: Record<string, unknown>, db: D1Database, lang: Lang): Promise<string> {
+  async execute(input: Record<string, unknown>, db: D1Database, lang: Lang, userId?: number): Promise<string> {
     const { vehicle } = input as { vehicle?: string };
-    const r = await resolveVehicle(db, vehicle);
+    const r = await resolveVehicle(db, vehicle, userId);
     if (r.status === 'not_found') return t('general.vehicle_not_found', lang, r.name);
     if (r.status === 'ambiguous') return ambiguousMsg(r.vehicles, t('ambiguous.query', lang), lang);
 
     const vehicleId = r.status === 'resolved' ? r.vehicle.id : undefined;
     const vehicleName = r.status === 'resolved' ? r.vehicle.name : undefined;
 
-    const reminders = await listRemindersByVehicle(db, vehicleId);
+    const reminders = await listRemindersByVehicle(db, vehicleId, userId);
     const tag = vehicleName ? t('fuel.vehicle_tag', lang, vehicleName) : '';
     if (reminders.length === 0) return t('reminder.list_empty', lang, tag);
 
@@ -115,14 +115,14 @@ export class CancelReminderTool implements Tool {
   } as const;
   readonly required = ['type'];
 
-  async execute(input: Record<string, unknown>, db: D1Database, lang: Lang): Promise<string> {
+  async execute(input: Record<string, unknown>, db: D1Database, lang: Lang, userId?: number): Promise<string> {
     const { type, vehicle } = input as { type: string; vehicle?: string };
-    const r = await resolveVehicle(db, vehicle);
+    const r = await resolveVehicle(db, vehicle, userId);
     if (r.status === 'not_found') return t('general.vehicle_not_found', lang, r.name);
     if (r.status === 'ambiguous') return ambiguousMsg(r.vehicles, t('ambiguous.cancel', lang), lang);
 
     const vehicleId = r.status === 'resolved' ? r.vehicle.id : undefined;
-    const count = await cancelReminders(db, { type, vehicleId });
+    const count = await cancelReminders(db, { type, vehicleId, userId });
     return count > 0
       ? t('reminder.cancelled', lang, type, String(count))
       : t('reminder.cancel_not_found', lang, type);

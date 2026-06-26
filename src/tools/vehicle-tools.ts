@@ -25,15 +25,15 @@ export class AddVehicleTool implements Tool {
   } as const;
   readonly required = ['name'];
 
-  async execute(input: Record<string, unknown>, db: D1Database, lang: Lang): Promise<string> {
+  async execute(input: Record<string, unknown>, db: D1Database, lang: Lang, userId?: number): Promise<string> {
     const { name, brand, model, fuel_type, tank_capacity, color } = input as {
       name: string; brand?: string; model?: string;
       fuel_type?: string; tank_capacity?: number; color?: string;
     };
-    const existing = await getVehicleByName(db, name);
+    const existing = await getVehicleByName(db, name, userId);
     if (existing) return t('vehicle.already_exists', lang, name);
-    const isFirst = (await listVehicles(db)).length === 0;
-    await insertVehicle(db, name, { isDefault: isFirst, brand, model, fuel_type, tank_capacity, color });
+    const isFirst = (await listVehicles(db, userId)).length === 0;
+    await insertVehicle(db, name, { isDefault: isFirst, brand, model, fuel_type, tank_capacity, color, userId });
     return isFirst
       ? t('vehicle.added_default', lang, name)
       : t('vehicle.added', lang, name);
@@ -49,8 +49,8 @@ export class ListVehiclesTool implements Tool {
   readonly parameters = {} as const;
   readonly required: string[] = [];
 
-  async execute(_input: Record<string, unknown>, db: D1Database, lang: Lang): Promise<string> {
-    const vehicles = await listVehicles(db);
+  async execute(_input: Record<string, unknown>, db: D1Database, lang: Lang, userId?: number): Promise<string> {
+    const vehicles = await listVehicles(db, userId);
     if (vehicles.length === 0) return t('vehicle.no_vehicles', lang);
     const lines = vehicles.map(v => {
       const label = v.alias ? `${v.name}（${v.alias}）` : v.name;
@@ -69,11 +69,11 @@ export class SetDefaultVehicleTool implements Tool {
   readonly parameters = { name: { type: 'string', description: '要设为默认的车辆名称' } } as const;
   readonly required = ['name'];
 
-  async execute(input: Record<string, unknown>, db: D1Database, lang: Lang): Promise<string> {
+  async execute(input: Record<string, unknown>, db: D1Database, lang: Lang, userId?: number): Promise<string> {
     const { name } = input as { name: string };
-    const v = await getVehicleByNameOrAlias(db, name);
+    const v = await getVehicleByNameOrAlias(db, name, userId);
     if (!v) return t('general.vehicle_not_found', lang, name);
-    await setDefaultVehicle(db, v.id);
+    await setDefaultVehicle(db, v.id, userId);
     return t('vehicle.set_default_ok', lang, v.name);
   }
 }
@@ -90,12 +90,12 @@ export class RenameVehicleTool implements Tool {
   } as const;
   readonly required = ['name', 'new_name'];
 
-  async execute(input: Record<string, unknown>, db: D1Database, lang: Lang): Promise<string> {
+  async execute(input: Record<string, unknown>, db: D1Database, lang: Lang, userId?: number): Promise<string> {
     const { name, new_name } = input as { name: string; new_name: string };
     if (name === new_name) return t('vehicle.rename_same', lang);
-    const v = await getVehicleByNameOrAlias(db, name);
+    const v = await getVehicleByNameOrAlias(db, name, userId);
     if (!v) return t('general.vehicle_not_found', lang, name);
-    const clash = await getVehicleByName(db, new_name);
+    const clash = await getVehicleByName(db, new_name, userId);
     if (clash) return t('vehicle.rename_clash', lang, new_name);
     await renameVehicle(db, v.id, new_name);
     return t('vehicle.renamed', lang, v.name, new_name);
@@ -114,15 +114,15 @@ export class SetVehicleAliasTool implements Tool {
   } as const;
   readonly required = ['name', 'alias'];
 
-  async execute(input: Record<string, unknown>, db: D1Database, lang: Lang): Promise<string> {
+  async execute(input: Record<string, unknown>, db: D1Database, lang: Lang, userId?: number): Promise<string> {
     const { name, alias } = input as { name: string; alias: string };
-    const v = await getVehicleByNameOrAlias(db, name);
+    const v = await getVehicleByNameOrAlias(db, name, userId);
     if (!v) return t('general.vehicle_not_found', lang, name);
     if (!alias || alias.trim() === '') {
       await setVehicleAlias(db, v.id, null);
       return t('vehicle.alias_removed', lang, v.name);
     }
-    const clash = await getVehicleByNameOrAlias(db, alias);
+    const clash = await getVehicleByNameOrAlias(db, alias, userId);
     if (clash && clash.id !== v.id) return t('vehicle.alias_clash', lang, alias);
     await setVehicleAlias(db, v.id, alias.trim());
     return t('vehicle.alias_set', lang, v.name, alias.trim());
@@ -145,12 +145,12 @@ export class UpdateVehicleTool implements Tool {
   } as const;
   readonly required = ['name'];
 
-  async execute(input: Record<string, unknown>, db: D1Database, lang: Lang): Promise<string> {
+  async execute(input: Record<string, unknown>, db: D1Database, lang: Lang, userId?: number): Promise<string> {
     const { name, brand, model, fuel_type, tank_capacity, color } = input as {
       name: string; brand?: string; model?: string;
       fuel_type?: string; tank_capacity?: number; color?: string;
     };
-    const v = await getVehicleByNameOrAlias(db, name);
+    const v = await getVehicleByNameOrAlias(db, name, userId);
     if (!v) return t('general.vehicle_not_found', lang, name);
 
     const fields: Record<string, unknown> = {};

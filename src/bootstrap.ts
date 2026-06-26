@@ -47,8 +47,8 @@ export function bootstrap(env: Env): App {
   // 注册知识库搜索工具（需要 Env 中的 AI/KNOWLEDGE_INDEX 绑定）
   registry.register(new SearchKnowledgeTool(env.AI, env.KNOWLEDGE_INDEX));
   const tools = registry.toOpenAI();
-  const agent: AgentRunner = (messages: Message[], db: D1Database, lang?: Lang) =>
-    runAgentLoop(messages, llm, tools, registry, db, lang);
+  const agent: AgentRunner = (messages: Message[], db: D1Database, lang?: Lang, userId?: number) =>
+    runAgentLoop(messages, llm, tools, registry, db, lang, userId);
 
   const base = {
     messenger, session: new CFKVSession(env.SESSION_KV),

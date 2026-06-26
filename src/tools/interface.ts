@@ -10,7 +10,9 @@ export interface Tool {
   descriptionEn?: string;                // spec 010: 英文描述（toOpenAI('en') 时使用）
   parameters: Record<string, unknown>;    // JSON Schema（function-calling 的 parameters）
   required: string[];                     // 必填参数名列表
-  execute(input: Record<string, unknown>, db: D1Database, lang: Lang): Promise<string>;
+  // userId（spec 016）：当前用户 id，由 dispatch 注入；省略 → 不按用户过滤（单用户/历史路径）。
+  // 实现 3 参版本的旧工具仍结构兼容本签名。
+  execute(input: Record<string, unknown>, db: D1Database, lang: Lang, userId?: number): Promise<string>;
 }
 
 // ── ToolRegistry：收集 + 生成 OpenAI 格式 + 分发 ────────────────────────────
@@ -48,10 +50,10 @@ export class ToolRegistry {
     return defs;
   }
 
-  /** 按 name 分发执行 */
-  async dispatch(name: string, input: Record<string, unknown>, db: D1Database, lang: Lang = 'zh'): Promise<string> {
+  /** 按 name 分发执行（userId 注入当前用户，spec 016） */
+  async dispatch(name: string, input: Record<string, unknown>, db: D1Database, lang: Lang = 'zh', userId?: number): Promise<string> {
     const tool = this.get(name);
     if (!tool) return lang === 'en' ? `Unknown tool: ${name}` : `未知工具：${name}`;
-    return tool.execute(input, db, lang);
+    return tool.execute(input, db, lang, userId);
   }
 }

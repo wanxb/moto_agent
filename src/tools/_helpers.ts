@@ -13,15 +13,15 @@ export type VehicleResolution =
   | { status: 'ambiguous'; vehicles: Vehicle[] }
   | { status: 'none' };
 
-export async function resolveVehicle(db: D1Database, name?: string): Promise<VehicleResolution> {
+export async function resolveVehicle(db: D1Database, name?: string, userId?: number): Promise<VehicleResolution> {
   if (name) {
-    const v = await getVehicleByNameOrAlias(db, name);   // spec 009：全名或别名均可匹配
+    const v = await getVehicleByNameOrAlias(db, name, userId);   // spec 009：全名或别名均可匹配
     return v ? { status: 'resolved', vehicle: v } : { status: 'not_found', name };
   }
-  const def = await getDefaultVehicle(db);
+  const def = await getDefaultVehicle(db, userId);
   if (def) return { status: 'resolved', vehicle: def };
 
-  const all = await listVehicles(db);
+  const all = await listVehicles(db, userId);
   if (all.length === 0) return { status: 'none' };
   if (all.length === 1) return { status: 'resolved', vehicle: all[0] };
   return { status: 'ambiguous', vehicles: all };

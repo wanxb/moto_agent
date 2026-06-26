@@ -9,6 +9,7 @@ import {
   insertVehicle, listVehicles, getVehicleByNameOrAlias, getDefaultVehicle, countVehicles,
   getActiveReminders, listRemindersByVehicle, cancelReminders,
 } from '../src/database';
+import { registry } from '../src/tools';
 import { initDB, clearDB } from './utils';
 
 beforeAll(async () => { await initDB(env.DB); });
@@ -169,5 +170,33 @@ describe('bindTelegramToUser', () => {
 
   it('拒绝 — 邮箱账号不存在', async () => {
     await expect(bindTelegramToUser(env.DB, 'nope@x.com', '999')).rejects.toThrow();
+  });
+});
+
+// ── 工具层 dispatch 按 userId 隔离（spec 016 T5-A）─────────────────────────────
+
+describe('tool dispatch scopes by userId', () => {
+  it('log_fuel 落在 dispatch 的用户名下；读取互不可见', async () => {
+    const a = await createUser(env.DB, { email: 'ta@x.com' });
+    const b = await createUser(env.DB, { email: 'tb@x.com' });
+
+    // 无车 → 孤儿记录，仅靠 user_id 隔离
+    await registry.dispatch('log_fuel', { date: '2026-06-01', odometer: 1000, liters: 5, price_total: 50 }, env.DB, 'zh', a);
+    await registry.dispatch('log_fuel', { date: '2026-06-01', odometer: 8000, liters: 8, price_total: 80 }, env.DB, 'zh', b);
+
+    expect((await getLastFuelRecord(env.DB, undefined, a))!.odometer).toBe(1000);
+    expect((await getLastFuelRecord(env.DB, undefined, b))!.odometer).toBe(8000);
+
+    // get_last_record 工具经 dispatch 只看到自己
+    const aView = await registry.dispatch('get_last_record', {}, env.DB, 'zh', a);
+    expect(aView).toContain('1,000');
+    expect(aView).not.toContain('8,000');
+  });
+
+  it('无 userId 的 dispatch 维持单用户行为（不过滤）', async () => {
+    const a = await createUser(env.DB, { email: 'ta@x.com' });
+    await registry.dispatch('log_fuel', { date: '2026-06-01', odometer: 1000, liters: 5, price_total: 50 }, env.DB, 'zh', a);
+    // 不传 userId → 看得到（历史/单用户路径）
+    expect((await getLastFuelRecord(env.DB))!.odometer).toBe(1000);
   });
 });

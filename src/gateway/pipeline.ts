@@ -9,8 +9,8 @@ import { trimHistory } from '../session-store/trim-history';
 import { checkRateLimit, RULES, type RateLimitRule } from './rate-limiter';
 import { SESSION_TTL, MAX_SESSION_MESSAGES } from '../config';
 
-// 轻量 agent 跑手签名：接收消息历史 + DB + 语言 → 返回最终回复文本
-export type AgentRunner = (messages: Message[], db: D1Database, lang?: Lang) => Promise<string>;
+// 轻量 agent 跑手签名：接收消息历史 + DB + 语言 + 当前用户 id（spec 016）→ 返回最终回复文本
+export type AgentRunner = (messages: Message[], db: D1Database, lang?: Lang, userId?: number) => Promise<string>;
 
 export interface PipelineContext {
   db: D1Database;

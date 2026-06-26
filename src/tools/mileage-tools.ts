@@ -18,23 +18,23 @@ export class LogMileageTool implements Tool {
   } as const;
   readonly required = ['date', 'odometer'];
 
-  async execute(input: Record<string, unknown>, db: D1Database, lang: Lang): Promise<string> {
+  async execute(input: Record<string, unknown>, db: D1Database, lang: Lang, userId?: number): Promise<string> {
     const { date, odometer, note, vehicle } = input as {
       date: string; odometer: number; note?: string; vehicle?: string;
     };
-    const r = await resolveVehicle(db, vehicle);
+    const r = await resolveVehicle(db, vehicle, userId);
     if (r.status === 'not_found') return t('general.vehicle_not_found_add', lang, r.name);
     if (r.status === 'ambiguous') return ambiguousMsg(r.vehicles, t('ambiguous.record', lang), lang);
 
     const vehicleId = r.status === 'resolved' ? r.vehicle.id : undefined;
     const vehicleName = r.status === 'resolved' ? r.vehicle.name : undefined;
 
-    await insertMileageRecord(db, { date, odometer, note, vehicle_id: vehicleId });
+    await insertMileageRecord(db, { date, odometer, note, vehicle_id: vehicleId, user_id: userId });
     const tag = vehicleName ? t('fuel.vehicle_tag', lang, vehicleName) : '';
     let msg = t('mileage.recorded', lang, tag, fmtNumber(odometer, lang), date);
 
     // odometer 异常检查
-    const prev = await getLastFuelRecord(db, vehicleId);
+    const prev = await getLastFuelRecord(db, vehicleId, userId);
     if (prev && odometer < prev.odometer) {
       msg += '\n\n⚠️ ' + t('fuel.odometer_anomaly', lang, fmtNumber(prev.odometer, lang));
     }

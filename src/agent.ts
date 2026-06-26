@@ -20,6 +20,7 @@ export async function runAgentLoop(
   registry: ToolRegistry,
   db: D1Database,
   lang: Lang = 'zh',
+  userId?: number,
 ): Promise<string> {
   const systemMsg: Message = { role: 'system', content: buildSystemPrompt(lang) };
   const working: Message[] = [systemMsg, ...messages];
@@ -37,7 +38,7 @@ export async function runAgentLoop(
     for (const tc of response.toolCalls) {
       let result: string;
       try {
-        result = await registry.dispatch(tc.name, tc.input, db, lang);
+        result = await registry.dispatch(tc.name, tc.input, db, lang, userId);
         console.log(`[tool] ${tc.name} →`, result.slice(0, 80));
       } catch (e) {
         result = t('general.tool_error', lang, e instanceof Error ? e.message : String(e));

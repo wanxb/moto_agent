@@ -34,11 +34,11 @@ export class LogMaintenanceTool implements Tool {
   } as const;
   readonly required = ['date', 'type'];
 
-  async execute(input: Record<string, unknown>, db: D1Database, lang: Lang): Promise<string> {
+  async execute(input: Record<string, unknown>, db: D1Database, lang: Lang, userId?: number): Promise<string> {
     const { date, type, odometer, cost, note, vehicle, confirm } = input as {
       date: string; type: string; odometer?: number; cost?: number; note?: string; vehicle?: string; confirm?: boolean;
     };
-    const r = await resolveVehicle(db, vehicle);
+    const r = await resolveVehicle(db, vehicle, userId);
     if (r.status === 'not_found') return t('general.vehicle_not_found_add', lang, r.name);
     if (r.status === 'ambiguous') return ambiguousMsg(r.vehicles, t('ambiguous.record', lang), lang);
 
@@ -47,14 +47,14 @@ export class LogMaintenanceTool implements Tool {
 
     // spec 017: 写入前去重软拦截——同车同类型且日期相近视为疑似重复，未确认则先反问不落库
     if (confirm !== true) {
-      const sameType = await findMaintenanceRecords(db, { vehicleId, type });
+      const sameType = await findMaintenanceRecords(db, { vehicleId, type, userId });
       const dup = sameType.find(rec => daysBetween(rec.date, date) <= MAINT_DUP_DAYS);
       if (dup) {
         return t('dup.maint_warn', lang, type, dup.date);
       }
     }
 
-    await insertMaintenanceRecord(db, { date, type, odometer: odometer ?? null, cost: cost ?? null, note, vehicle_id: vehicleId });
+    await insertMaintenanceRecord(db, { date, type, odometer: odometer ?? null, cost: cost ?? null, note, vehicle_id: vehicleId, user_id: userId });
     const parts = [type, fmtKm(odometer ?? null, lang), fmtCost(cost ?? null, lang), date];
     const tag = vehicleName ? t('fuel.vehicle_tag', lang, vehicleName) : '';
     return t('maint.recorded', lang, tag) + '\n' + t('maint.parts', lang, parts.join(' · '));
@@ -74,11 +74,11 @@ export class QueryMaintenanceTool implements Tool {
   } as const;
   readonly required: string[] = [];
 
-  async execute(input: Record<string, unknown>, db: D1Database, lang: Lang): Promise<string> {
+  async execute(input: Record<string, unknown>, db: D1Database, lang: Lang, userId?: number): Promise<string> {
     const { type, last_only, vehicle } = input as {
       type?: string; last_only?: boolean; vehicle?: string;
     };
-    const r = await resolveVehicle(db, vehicle);
+    const r = await resolveVehicle(db, vehicle, userId);
     if (r.status === 'not_found') return t('general.vehicle_not_found', lang, r.name);
     if (r.status === 'ambiguous') return ambiguousMsg(r.vehicles, t('ambiguous.query', lang), lang);
 
@@ -87,12 +87,12 @@ export class QueryMaintenanceTool implements Tool {
     const tag = vehicleName ? t('fuel.vehicle_tag', lang, vehicleName) : '';
 
     if (last_only && type) {
-      const last = await getLastMaintenanceByType(db, type, vehicleId);
+      const last = await getLastMaintenanceByType(db, type, vehicleId, userId);
       if (!last) return t('maint.no_records', lang, type, tag);
       return [t('maint.last_title', lang, type, tag), `${last.date} · ${fmtKm(last.odometer, lang)} · ${fmtCost(last.cost, lang)}`].join('\n');
     }
 
-    const records = await getMaintenanceRecords(db, { vehicleId, type });
+    const records = await getMaintenanceRecords(db, { vehicleId, type, userId });
     if (records.length === 0) {
       return t('maint.no_records', lang, type || '', tag);
     }
@@ -125,12 +125,12 @@ export class DeleteMaintenanceTool implements Tool {
   } as const;
   readonly required: string[] = [];
 
-  async execute(input: Record<string, unknown>, db: D1Database, lang: Lang): Promise<string> {
+  async execute(input: Record<string, unknown>, db: D1Database, lang: Lang, userId?: number): Promise<string> {
     const { type, date, vehicle, keep_one, confirm } = input as {
       type?: string; date?: string; vehicle?: string; keep_one?: boolean; confirm?: boolean;
     };
 
-    const r = await resolveVehicle(db, vehicle);
+    const r = await resolveVehicle(db, vehicle, userId);
     if (r.status === 'not_found') return t('general.vehicle_not_found', lang, r.name);
     if (r.status === 'ambiguous') return ambiguousMsg(r.vehicles, t('ambiguous.delete', lang), lang);
 
@@ -139,7 +139,7 @@ export class DeleteMaintenanceTool implements Tool {
     const tag = vehicleName ? t('fuel.vehicle_tag', lang, vehicleName) : '';
 
     // 升序定位（最早在前），便于 keep_one 保留最早一条
-    const matches = await findMaintenanceRecords(db, { vehicleId, type, date });
+    const matches = await findMaintenanceRecords(db, { vehicleId, type, date, userId });
     if (matches.length === 0) return t('delete.maint_not_found', lang);
 
     // 多条重复去重：保留最早一条，软删其余
