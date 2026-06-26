@@ -81,6 +81,7 @@ CREATE TABLE IF NOT EXISTS reminders (
     note             TEXT,
     chat_id          TEXT,                          -- 推送目标（空→用 ALLOWED_CHAT_ID）
     user_id          INTEGER,                       -- 所属用户（spec 016）；与 chat_id 解耦
+    remind_count     INTEGER NOT NULL DEFAULT 0,       -- cron 已推送次数，满 3 次标记完成（spec 016 修订）
     status           TEXT    NOT NULL DEFAULT 'active',
     fired_at         TEXT,
     created_at       TEXT    NOT NULL DEFAULT (datetime('now'))

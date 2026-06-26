@@ -6,7 +6,7 @@ import { t } from '../i18n';
 import { resolveVehicle, ambiguousMsg, fmtKm, fmtCost, validateDateNotFuture } from './_helpers';
 import {
   insertMaintenanceRecord, getMaintenanceRecords, getLastMaintenanceByType,
-  findMaintenanceRecords, softDeleteMaintenanceRecord,
+  findMaintenanceRecords, softDeleteMaintenanceRecord, renewReminderAfterMaintenance,
 } from '../database';
 import { MAINT_DUP_DAYS } from '../config';
 
@@ -59,6 +59,14 @@ export class LogMaintenanceTool implements Tool {
     }
 
     await insertMaintenanceRecord(db, { date, type, odometer: odometer ?? null, cost: cost ?? null, note, vehicle_id: vehicleId, user_id: userId });
+
+    // 保养记录后自动续期：找到匹配的里程提醒→标记完成→创建下一个提醒（从本次保养里程开始）
+    let renewNote = '';
+    if (odometer != null) {
+      await renewReminderAfterMaintenance(db, type, vehicleId ?? null, odometer, userId);
+      // 如果续期了，提示信息里附加一小句（可选，不打断主要回复）
+    }
+
     const parts = [type, fmtKm(odometer ?? null, lang), fmtCost(cost ?? null, lang), date];
     const tag = vehicleName ? t('fuel.vehicle_tag', lang, vehicleName) : '';
     return t('maint.recorded', lang, tag) + '\n' + t('maint.parts', lang, parts.join(' · '));

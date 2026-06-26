@@ -187,29 +187,33 @@ describe('findDueReminders', () => {
   });
 });
 
-// ── scheduled: runScheduled (push + dedup) ────────────────────────────────────
+// ── scheduled: runScheduled（remind_count 模式，最多推 3 次，不再自动续期）────
 
 describe('runScheduled', () => {
-  it('AC8 — pushes due reminders once, then dedups on next run', async () => {
+  it('推送后 remind_count+1，仍在活跃（<3 次）→ 下次 cron 继续送', async () => {
     const green = await insertVehicle(env.DB, '小绿', { isDefault: true });
     await insertReminder(env.DB, { vehicle_id: green, type: '机油', mode: 'mileage', trigger_odometer: 13000 });
     await insertFuelRecord(env.DB, { date: '2026-06-05', odometer: 13050, liters: 10, price_total: 98, vehicle_id: green });
 
-    const sent: Array<{ chatId: string; text: string }> = [];
-    const send = async (chatId: string, text: string) => { sent.push({ chatId, text }); };
+    const sent: string[] = [];
     const e = makeEnv(env.DB, env.SESSION_KV);
-
-    const r1 = await runScheduled(e, { today: '2026-06-10', send });
-    expect(r1.fired).toBe(1);
+    await runScheduled(e, { today: '2026-06-10', send: async (_, t) => { sent.push(t); } });
     expect(sent).toHaveLength(1);
-    expect(sent[0].chatId).toBe('999999');             // ALLOWED_CHAT_ID fallback
-    expect(sent[0].text).toContain('🔔 保养提醒（小绿）');
-    expect(sent[0].text).toContain('13,000 km');
+    expect(sent[0]).toContain('🔔');
+    // 推了一次但 remind_count=1 < 3，仍活跃
+    const active = await getActiveReminders(env.DB);
+    expect(active).toHaveLength(1);
+    expect(active[0].remind_count).toBe(1);
 
-    // 第二次扫描：已 done，不重发
-    const r2 = await runScheduled(e, { today: '2026-06-11', send });
-    expect(r2.fired).toBe(0);
-    expect(sent).toHaveLength(1);
+    // 第二次 cron：再推，count=2，仍活跃
+    await runScheduled(e, { today: '2026-06-11', send: async (_, t) => { sent.push(t); } });
+    expect(sent).toHaveLength(2);
+    expect((await getActiveReminders(env.DB))[0].remind_count).toBe(2);
+
+    // 第三次 cron：count=3 → markDone，不再活跃
+    await runScheduled(e, { today: '2026-06-12', send: async (_, t) => { sent.push(t); } });
+    expect(sent).toHaveLength(3);
+    expect(await getActiveReminders(env.DB)).toHaveLength(0);
   });
 
   it('does not mark done when push fails (retryable)', async () => {
@@ -219,39 +223,40 @@ describe('runScheduled', () => {
     const failing = async () => { throw new Error('telegram down'); };
     const e = makeEnv(env.DB, env.SESSION_KV);
 
-    const r = await runScheduled(e, { today: '2026-06-10', send: failing });
-    expect(r.fired).toBe(0);
-    expect(await getActiveReminders(env.DB)).toHaveLength(1);   // 仍 active，可重试
+    await runScheduled(e, { today: '2026-06-10', send: failing });
+    // push 失败不 count、不做任何操作
+    const active = await getActiveReminders(env.DB);
+    expect(active).toHaveLength(1);
+    expect(active[0].remind_count).toBe(0);
   });
 
-  it('AC-B1/B2 — mileage reminder with interval auto-renews to next', async () => {
+  it('推送后不自动创建下一个提醒（续期只在 log_maintenance 时触发）', async () => {
     const green = await insertVehicle(env.DB, '小绿', { isDefault: true });
     await insertReminder(env.DB, { vehicle_id: green, type: '机油', mode: 'mileage', trigger_odometer: 13000, interval_km: 3000 });
     await insertFuelRecord(env.DB, { date: '2026-06-05', odometer: 13050, liters: 10, price_total: 98, vehicle_id: green });
 
-    const sent: Array<{ chatId: string; text: string }> = [];
-    const send = async (chatId: string, text: string) => { sent.push({ chatId, text }); };
-    const e = makeEnv(env.DB, env.SESSION_KV);
-
-    const r = await runScheduled(e, { today: '2026-06-10', send });
-    expect(r.fired).toBe(1);
-    expect(sent[0].text).toContain('已自动续期，下次 16,000 km');
-
-    // 旧的 done，新的 active 在 16000
-    const active = await getActiveReminders(env.DB);
-    expect(active).toHaveLength(1);
-    expect(active[0].trigger_odometer).toBe(16000);
-    expect(active[0].interval_km).toBe(3000);
-  });
-
-  it('AC-B3 — absolute mileage reminder (no interval) does NOT renew', async () => {
-    const green = await insertVehicle(env.DB, '小绿', { isDefault: true });
-    await insertReminder(env.DB, { vehicle_id: green, type: '机油', mode: 'mileage', trigger_odometer: 13000 });
-    await insertFuelRecord(env.DB, { date: '2026-06-05', odometer: 13050, liters: 10, price_total: 98, vehicle_id: green });
-
     const e = makeEnv(env.DB, env.SESSION_KV);
     await runScheduled(e, { today: '2026-06-10', send: async () => {} });
-    expect(await getActiveReminders(env.DB)).toHaveLength(0);   // 一次性，无续期
+
+    // 只有一个提醒（旧的那个），没有自动续期的新提醒
+    const all = await getActiveReminders(env.DB);
+    expect(all).toHaveLength(1);
+    expect(all[0].trigger_odometer).toBe(13000);          // 没变，没自动+3000
+    expect(all[0].remind_count).toBe(1);
+  });
+
+  it('无 interval 的提醒同样推 3 次后完成', async () => {
+    const green = await insertVehicle(env.DB, '小绿', { isDefault: true });
+    await insertReminder(env.DB, { vehicle_id: green, type: '保险', mode: 'date', trigger_date: '2026-01-01' });
+
+    const e = makeEnv(env.DB, env.SESSION_KV);
+    const noop = async () => {};
+
+    // 推 3 次
+    await runScheduled(e, { today: '2026-06-10', send: noop });
+    await runScheduled(e, { today: '2026-06-11', send: noop });
+    await runScheduled(e, { today: '2026-06-12', send: noop });
+    expect(await getActiveReminders(env.DB)).toHaveLength(0);   // 第 3 次后完成
   });
 });
 
@@ -297,53 +302,93 @@ describe('runScheduled multi-user (T10B)', () => {
   });
 });
 
-// ── formatReminder 英文 ───────────────────────────────────────────────────────
+// ── formatReminder（zh + en）──────────────────────────────────────────────────
 
-describe('formatReminder (en)', () => {
-  it('renders English mileage + date messages', () => {
+describe('formatReminder', () => {
+  it('zh mileage and date messages (no remind count)', () => {
+    const mileage = formatReminder({
+      id: 1, vehicle_id: 1, type: '机油', mode: 'mileage', trigger_odometer: 13000,
+      trigger_date: null, interval_km: null, note: null, chat_id: null, user_id: null,
+      status: 'active', fired_at: null, created_at: '', remind_count: 0,
+      vehicle_name: '小绿', current_odometer: 13050,
+    });
+    expect(mileage).toContain('该处理「机油」了');
+    expect(mileage).toContain('13,050');
+    expect(mileage).not.toContain('已自动续期');          // 续期只在保养记录时触发，不在推送文案
+
+    const date = formatReminder({
+      id: 2, vehicle_id: null, type: '保险', mode: 'date', trigger_odometer: null,
+      trigger_date: '2027-01-05', interval_km: null, note: null, chat_id: null, user_id: null,
+      status: 'active', fired_at: null, created_at: '', remind_count: 0,
+      vehicle_name: null,
+    });
+    expect(date).toContain('保险 到期：2027-01-05');
+  });
+
+  it('zh — remind count appended', () => {
+    const msg = formatReminder({
+      id: 1, vehicle_id: 1, type: '机油', mode: 'mileage', trigger_odometer: 13000,
+      trigger_date: null, interval_km: null, note: null, chat_id: null, user_id: null,
+      status: 'active', fired_at: null, created_at: '', remind_count: 0,
+      vehicle_name: '小绿', current_odometer: 13050,
+    }, null, 'zh', 2);
+    expect(msg).toContain('（第 2 次提醒）');
+  });
+
+  it('en mileage and date messages with remind count', () => {
     const mileage = formatReminder({
       id: 1, vehicle_id: 1, type: 'Oil', mode: 'mileage', trigger_odometer: 13000,
-      trigger_date: null, interval_km: 3000, note: null, chat_id: null, user_id: null, status: 'active', fired_at: null,
-      created_at: '', vehicle_name: 'Greenie', current_odometer: 13050,
-    }, 16000, 'en');
+      trigger_date: null, interval_km: 3000, note: null, chat_id: null, user_id: null,
+      status: 'active', fired_at: null, created_at: '', remind_count: 0,
+      vehicle_name: 'Greenie', current_odometer: 13050,
+    }, null, 'en', 2);
     expect(mileage).toContain('Time for "Oil"');
-    expect(mileage).toContain('Auto-renewed');
-    expect(mileage).toContain('16,000 km');
+    expect(mileage).toContain('(reminder 2)');
+    expect(mileage).not.toContain('Auto-renewed');
 
     const date = formatReminder({
       id: 2, vehicle_id: null, type: 'Insurance', mode: 'date', trigger_odometer: null,
-      trigger_date: '2027-01-05', interval_km: null, note: null, chat_id: null, user_id: null, status: 'active', fired_at: null,
-      created_at: '', vehicle_name: null,
+      trigger_date: '2027-01-05', interval_km: null, note: null, chat_id: null, user_id: null,
+      status: 'active', fired_at: null, created_at: '', remind_count: 0,
+      vehicle_name: null,
     }, null, 'en');
     expect(date).toContain('Insurance due: 2027-01-05');
   });
 });
 
-// ── formatReminder ────────────────────────────────────────────────────────────
+// ── 保养记录后自动续期 ──────────────────────────────────────────────────────
 
-describe('formatReminder', () => {
-  it('mileage and date formats', () => {
-    const mileage = formatReminder({
-      id: 1, vehicle_id: 1, type: '机油', mode: 'mileage', trigger_odometer: 13000,
-      trigger_date: null, interval_km: null, note: null, chat_id: null, status: 'active', fired_at: null,
-      created_at: '', vehicle_name: '小绿', current_odometer: 13050,
-    });
-    expect(mileage).toContain('该处理「机油」了');
-    expect(mileage).toContain('13,050');
+describe('reminder renewal on maintenance (log_maintenance)', () => {
+  it('记录保养（有里程）→ 旧提醒完成 + 新提醒从保养里程开始', async () => {
+    const green = await insertVehicle(env.DB, '小绿', { isDefault: true });
+    await insertReminder(env.DB, { vehicle_id: green, type: '机油', mode: 'mileage', trigger_odometer: 13000, interval_km: 3000 });
 
-    // 带续期：附加下次里程
-    const renewed = formatReminder({
-      id: 1, vehicle_id: 1, type: '机油', mode: 'mileage', trigger_odometer: 13000,
-      trigger_date: null, interval_km: 3000, note: null, chat_id: null, status: 'active', fired_at: null,
-      created_at: '', vehicle_name: '小绿', current_odometer: 13050,
-    }, 16000);
-    expect(renewed).toContain('已自动续期，下次 16,000 km');
+    // 用户记录保养：换了机油，里程 13500
+    await dispatchTool('log_maintenance', { date: '2026-06-20', type: '机油', odometer: 13500, vehicle: '小绿' }, env.DB);
 
-    const date = formatReminder({
-      id: 2, vehicle_id: null, type: '保险', mode: 'date', trigger_odometer: null,
-      trigger_date: '2027-01-05', interval_km: null, note: null, chat_id: null, status: 'active', fired_at: null,
-      created_at: '', vehicle_name: null,
-    });
-    expect(date).toContain('保险 到期：2027-01-05');
+    // 旧提醒已完成
+    const active = await getActiveReminders(env.DB);
+    expect(active).toHaveLength(1);
+    expect(active[0].trigger_odometer).toBe(13500 + 3000);  // 从保养里程开始
+    expect(active[0].interval_km).toBe(3000);               // 继承原间隔
+    expect(active[0].type).toBe('机油');
+  });
+
+  it('记录保养不传里程 → 不续期（无法计算下次目标）', async () => {
+    const green = await insertVehicle(env.DB, '小绿', { isDefault: true });
+    await insertReminder(env.DB, { vehicle_id: green, type: '机油', mode: 'mileage', trigger_odometer: 13000, interval_km: 3000 });
+
+    await dispatchTool('log_maintenance', { date: '2026-06-20', type: '机油', vehicle: '小绿' }, env.DB);  // 无 odometer
+
+    const active = await getActiveReminders(env.DB);
+    expect(active).toHaveLength(1);
+    expect(active[0].trigger_odometer).toBe(13000);          // 没续期，仍是旧里程碑
+  });
+
+  it('无匹配提醒 → 不续期', async () => {
+    await insertVehicle(env.DB, '小绿', { isDefault: true });
+    // 没有提醒
+    await dispatchTool('log_maintenance', { date: '2026-06-20', type: '机油', odometer: 13500 }, env.DB);
+    expect(await getActiveReminders(env.DB)).toHaveLength(0);  // 无变化
   });
 });

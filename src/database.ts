@@ -1,4 +1,4 @@
-import { FuelRecord, Vehicle, MaintenanceRecord, ReminderWithVehicle, User } from './types';
+import { FuelRecord, Vehicle, MaintenanceRecord, Reminder, ReminderWithVehicle, User } from './types';
 import { FUEL_EDITABLE_COLUMNS } from './config';
 
 // ── Users (spec 016 多用户) ────────────────────────────────────────────────────
@@ -401,14 +401,15 @@ export async function insertReminder(db: D1Database, data: {
   vehicle_id?: number | null; type: string; mode: 'mileage' | 'date';
   trigger_odometer?: number | null; trigger_date?: string | null;
   interval_km?: number | null; note?: string | null; chat_id?: string | null;
-  user_id?: number | null;
+  user_id?: number | null; remind_count?: number;
 }): Promise<number> {
   const res = await db.prepare(
-    'INSERT INTO reminders (vehicle_id, type, mode, trigger_odometer, trigger_date, interval_km, note, chat_id, user_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
+    'INSERT INTO reminders (vehicle_id, type, mode, trigger_odometer, trigger_date, interval_km, note, chat_id, user_id, remind_count) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
   ).bind(
     data.vehicle_id ?? null, data.type, data.mode,
     data.trigger_odometer ?? null, data.trigger_date ?? null,
-    data.interval_km ?? null, data.note ?? null, data.chat_id ?? null, data.user_id ?? null
+    data.interval_km ?? null, data.note ?? null, data.chat_id ?? null,
+    data.user_id ?? null, data.remind_count ?? 0
   ).run();
   return res.meta.last_row_id as number;
 }
@@ -444,6 +445,45 @@ export async function cancelReminders(db: D1Database, opts: { type: string; vehi
 
 export async function markReminderDone(db: D1Database, id: number, firedAt: string): Promise<void> {
   await db.prepare("UPDATE reminders SET status = 'done', fired_at = ? WHERE id = ?").bind(firedAt, id).run();
+}
+
+// cron 推送后来一靴：remind_count+1。返回递增后的值（>0 即已推送过）。
+export async function incrementRemindCount(db: D1Database, id: number): Promise<number> {
+  const res = await db.prepare(
+    'UPDATE reminders SET remind_count = remind_count + 1 WHERE id = ?'
+  ).bind(id).run();
+  return res.meta.changes ?? 0;
+}
+
+// 保养记录后自动续期：找到该类型+车辆+用户的活跃提醒，标记完成，创建新提醒到下次里程。
+// 仅在 `log_maintenance` 提供了 odometer 时调用（无里程则无法计算续期目标）。
+export async function renewReminderAfterMaintenance(
+  db: D1Database, type: string, vehicleId: number | null, maintenanceOdometer: number, userId?: number
+): Promise<void> {
+  // 找到该类型+车辆+用户的活跃提醒——只续期有 interval_km 的里程类提醒
+  const where: string[] = ["type = ?", "mode = 'mileage'", "interval_km IS NOT NULL", "status = 'active'"];
+  const binds: unknown[] = [type];
+  if (vehicleId != null) { where.push('vehicle_id = ?'); binds.push(vehicleId); }
+  if (userId != null)    { where.push('user_id = ?');    binds.push(userId); }
+  const { results } = await db.prepare(
+    `SELECT * FROM reminders WHERE ${where.join(' AND ')} ORDER BY id ASC LIMIT 1`
+  ).bind(...binds).all<Reminder>();
+  if (!results.length) return;   // 无匹配提醒，无需续期
+
+  const old = results[0];
+  const nextOdometer = maintenanceOdometer + (old.interval_km ?? 0);
+  const now = new Date().toISOString().slice(0, 10);
+
+  // 原子：标记旧提醒完成 → 创建新提醒从本次保养里程开始
+  await db.batch([
+    db.prepare("UPDATE reminders SET status = 'done', fired_at = ? WHERE id = ?").bind(now, old.id),
+    db.prepare(
+      'INSERT INTO reminders (vehicle_id, type, mode, trigger_odometer, interval_km, note, chat_id, user_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+    ).bind(
+      old.vehicle_id, old.type, 'mileage', nextOdometer,
+      old.interval_km, old.note, old.chat_id, old.user_id
+    ),
+  ]);
 }
 
 // ── 知识库 RAG（spec 015）───────────────────────────────────────────────────────

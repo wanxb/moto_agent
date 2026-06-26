@@ -2,7 +2,9 @@ import { Bot } from 'grammy';
 import { Env, ReminderWithVehicle } from './types';
 import type { Lang } from './i18n/types';
 import { t } from './i18n';
-import { getActiveReminders, getLatestOdometer, markReminderDone, insertReminder, getUserById } from './database';
+import {
+  getActiveReminders, getLatestOdometer, markReminderDone, incrementRemindCount, getUserById,
+} from './database';
 
 export interface DueReminder extends ReminderWithVehicle {
   current_odometer?: number;   // mileage 模式：判定时的当前里程
@@ -24,18 +26,20 @@ export async function findDueReminders(db: D1Database, today: string): Promise<D
   return due;
 }
 
-// nextOdometer 非空时表示自动续期，附加下次里程提示（spec 006）。
-// lang 放最后一个参数（默认 zh）以兼容历史位置调用 formatReminder(r, next)。
-export function formatReminder(r: DueReminder, nextOdometer: number | null = null, lang: Lang = 'zh'): string {
+// 兼容历史签名 formatReminder(r, next) 与新版 formatReminder(r, null, lang, remindCount)。
+// remindCount ∈ [1,3] 时附加第N次提醒/剩余次数信息。
+export function formatReminder(
+  r: DueReminder, nextOdometer?: number | null, lang: Lang = 'zh', remindCount?: number
+): string {
   const loc = lang === 'en' ? 'en-US' : 'zh';
   const tag = r.vehicle_name ? t('cron.tag', lang, r.vehicle_name) : '';
+  const count = (remindCount != null && remindCount > 0) ? t('cron.remind_count', lang, String(remindCount)) : '';
   if (r.mode === 'mileage') {
     const cur = r.current_odometer != null ? r.current_odometer.toLocaleString(loc) : '—';
     const trig = (r.trigger_odometer ?? 0).toLocaleString(loc);
-    const renew = nextOdometer != null ? t('cron.renew', lang, nextOdometer.toLocaleString(loc)) : '';
-    return t('cron.mileage_msg', lang, tag, r.type, cur, trig, renew);
+    return t('cron.mileage_msg', lang, tag, r.type, cur, trig, count);
   }
-  return t('cron.date_msg', lang, tag, r.type, r.trigger_date ?? '');
+  return t('cron.date_msg', lang, tag, r.type, r.trigger_date ?? '') + (count ? '\n' + count : '');
 }
 
 type SendFn = (chatId: string, text: string) => Promise<void>;
@@ -66,20 +70,13 @@ export async function runScheduled(
       continue;
     }
     try {
-      // 里程提醒带间隔 → 自动续期到下一个里程（spec 006）
-      const next = (r.mode === 'mileage' && r.interval_km != null && r.trigger_odometer != null)
-        ? r.trigger_odometer + r.interval_km
-        : null;
-
-      await send(target, formatReminder(r, next, lang));
-      // 仅推送成功后才标记完成，失败下次重试（不丢提醒）
-      await markReminderDone(env.DB, r.id, today);
-      if (next != null) {
-        await insertReminder(env.DB, {
-          vehicle_id: r.vehicle_id, type: r.type, mode: 'mileage',
-          trigger_odometer: next, interval_km: r.interval_km, note: r.note,
-          chat_id: r.chat_id, user_id: r.user_id,   // 续期记录继承归属（chat_id + user_id）
-        });
+      await send(target, formatReminder(r, null, lang, r.remind_count + 1));
+      // 推送成功后：计数+1；满 3 次则标记完成（不再推送），否则保持活跃供下次 cron 再提醒。
+      // 续期不再在此触发——只在用户记录保养时（log_maintenance → renewReminderAfterMaintenance）自动创建下一个提醒。
+      await incrementRemindCount(env.DB, r.id);
+      if (r.remind_count + 1 >= 3) {
+        await markReminderDone(env.DB, r.id, today);
+        console.log(`[cron] reminder ${r.id} 第${r.remind_count + 1}次提醒后完成（不再推送）`);
       }
       fired++;
     } catch (e) {

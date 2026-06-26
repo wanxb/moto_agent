@@ -72,6 +72,7 @@ export async function initDB(db: D1Database): Promise<void> {
       note             TEXT,
       chat_id          TEXT,
       user_id          INTEGER,
+      remind_count     INTEGER NOT NULL DEFAULT 0,
       status           TEXT    NOT NULL DEFAULT 'active',
       fired_at         TEXT,
       created_at       TEXT    NOT NULL DEFAULT (datetime('now'))

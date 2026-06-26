@@ -116,6 +116,7 @@ export interface Reminder {
   note: string | null;
   chat_id: string | null;
   user_id: number | null;      // 所属用户（spec 016）；与 chat_id 解耦
+  remind_count: number;        // cron 已推送次数，满 3 次标记完成（spec 016 修订）
   status: 'active' | 'done';
   fired_at: string | null;
   created_at: string;
