@@ -83,8 +83,8 @@ npm run test-knowledge    # 离线评测知识库检索质量
 | `scripts/ingest-knowledge.ts` | 知识库离线入库：OCR → 清洗 → 分块 → JSON+SQL | 需装 poppler（winget install Poppler） |
 | `scripts/populate-vectorize.ts` | chunks → embedding → Vectorize 索引 | 幂等，利用 wrangler OAuth |
 | `scripts/test-knowledge.ts` | 离线评测知识库召回质量 | 本地余弦相似度 |
-| `src/routes/api.ts` | Dashboard REST API 路由 | 所有端点 token 鉴权 |
-| `src/routes/dashboard-html.ts` | Dashboard 前端 HTML（Chart.js + 分页 + 双语） | 图表/布局在此改 |
+| `src/routes/api.ts` | Dashboard/用户 REST API 路由 | session 优先 + `?token=` 兼容；按 `user_id` 过滤（spec 016） |
+| `web/` (Vite+Svelte SPA) | PWA 前端：对话/登录/设置/仪表盘，经 `[assets]` 托管（spec 016 / ADR-0010） | 页面在 `web/src/routes/`；构建 `npm --prefix web run build` |
 | `src/knowledge/embed.ts` | Workers AI bge-m3 embedding 封装 | 输出 1024 维向量 |
 | `src/tools/knowledge-tools.ts` | `search_knowledge` 工具：RAG 检索入口 | 不直接调，由 Agent 调度 |
 
