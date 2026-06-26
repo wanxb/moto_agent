@@ -10,6 +10,7 @@ import { RestAdapter } from './gateway/adapters/rest';
 import { MAX_VOICE_SECONDS } from './config';
 import { handleApiRequest } from './routes/api';
 import { handleAuthRequest } from './routes/auth-handler';
+import { handleChatRequest } from './routes/chat-api';
 import { dashboardPage } from './routes/dashboard-html';
 
 function makeWelcome(lang: Lang): string {
@@ -183,6 +184,11 @@ export default {
       // ── 认证路由（spec 016：Magic Link / 登出 / 绑定）─────────────────────
       if (url.pathname.startsWith('/auth/')) {
         return handleAuthRequest(request, env);
+      }
+
+      // ── PWA 对话（spec 016）──────────────────────────────────────────────
+      if (url.pathname === '/chat/api' || url.pathname === '/chat/voice') {
+        return handleChatRequest(request, env);
       }
 
       // ── 静态资源 / SPA（spec 016 / ADR-0010）──────────────────────────────
