@@ -8,6 +8,8 @@ function apiUrl(path: string) { return `http://localhost${path}&token=${TOKEN}`;
 
 beforeAll(async () => {
   // Ensure tables exist (the worker's fetch path would init them, but we'll ensure here)
+  // users 表：resolveApiUser 会按 ?token=（ALLOWED_CHAT_ID）查管理员；无 users 表会报错。
+  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY AUTOINCREMENT, email TEXT UNIQUE, telegram_id TEXT UNIQUE, nickname TEXT, lang TEXT NOT NULL DEFAULT 'zh', is_admin INTEGER NOT NULL DEFAULT 0, status TEXT NOT NULL DEFAULT 'active', created_at TEXT NOT NULL DEFAULT (datetime('now')), last_login TEXT)`).run();
   await env.DB.prepare(`CREATE TABLE IF NOT EXISTS vehicles (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, alias TEXT, brand TEXT, model TEXT, fuel_type TEXT, tank_capacity REAL, color TEXT, is_default INTEGER NOT NULL DEFAULT 0, is_active INTEGER NOT NULL DEFAULT 1, user_id INTEGER, created_at TEXT NOT NULL DEFAULT (datetime('now')))`).run();
   await env.DB.prepare(`CREATE TABLE IF NOT EXISTS fuel_records (id INTEGER PRIMARY KEY AUTOINCREMENT, date TEXT NOT NULL, odometer REAL NOT NULL, liters REAL NOT NULL, price_total REAL NOT NULL, fuel_type TEXT NOT NULL DEFAULT '95', note TEXT, vehicle_id INTEGER, deleted_at TEXT, user_id INTEGER, created_at TEXT NOT NULL DEFAULT (datetime('now')))`).run();
   await env.DB.prepare(`CREATE TABLE IF NOT EXISTS reminders (id INTEGER PRIMARY KEY AUTOINCREMENT, vehicle_id INTEGER, type TEXT NOT NULL, mode TEXT NOT NULL, trigger_odometer REAL, trigger_date TEXT, interval_km REAL, note TEXT, chat_id TEXT, user_id INTEGER, status TEXT NOT NULL DEFAULT 'active', fired_at TEXT, created_at TEXT NOT NULL DEFAULT (datetime('now')))`).run();

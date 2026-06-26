@@ -6,6 +6,8 @@ import {
 } from '../src/database';
 
 beforeAll(async () => {
+  // users 表：resolveApiUser 会按 ?token= 查管理员；无 users 表会报错。
+  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY AUTOINCREMENT, email TEXT UNIQUE, telegram_id TEXT UNIQUE, nickname TEXT, lang TEXT NOT NULL DEFAULT 'zh', is_admin INTEGER NOT NULL DEFAULT 0, status TEXT NOT NULL DEFAULT 'active', created_at TEXT NOT NULL DEFAULT (datetime('now')), last_login TEXT)`).run();
   await env.DB.prepare(`CREATE TABLE IF NOT EXISTS vehicles (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL, alias TEXT,

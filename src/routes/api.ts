@@ -2,7 +2,7 @@
 // 数据来源：现有 database.ts 函数，加少量直查 SQL。
 
 import { getFuelRecordsByDateRange, getMaintenanceRecords } from '../database';
-import { getActiveReminders, getUserById, updateUserLang } from '../database';
+import { getActiveReminders, getUserById, getUserByTelegramId, updateUserLang } from '../database';
 import { resolveSessionFromRequest } from '../services/session';
 import type { FuelRecord, MaintenanceRecord } from '../types';
 
@@ -46,17 +46,34 @@ export async function handleApiRequest(request: Request, env: { DB: D1Database; 
     return json({ user: { id: user.id, email: user.email, telegram_id: user.telegram_id, nickname: user.nickname, lang: user.lang, is_admin: user.is_admin } });
   }
 
-  const authErr = tokenAuth(request, env);
-  if (authErr) return authErr;
+  // 鉴权：优先 session cookie（多用户，按 user_id 过滤）；回退 ?token=（管理员，30 天过渡）。
+  const auth = await resolveApiUser(request, env);
+  if (auth instanceof Response) return auth;
+  const userId = auth.userId;
 
   switch (url.pathname) {
-    case '/api/v1/stats':        return json(await fuelStats(env.DB, url));
-    case '/api/v1/vehicles':     return json(await vehicleList(env.DB));
-    case '/api/v1/reminders':    return json(await reminderList(env.DB, url));
-    case '/api/v1/fuel-records': return json(await fuelRecordList(env.DB, url));
-    case '/api/v1/maintenance':  return json(await maintenanceList(env.DB, url));
+    case '/api/v1/stats':        return json(await fuelStats(env.DB, url, userId));
+    case '/api/v1/vehicles':     return json(await vehicleList(env.DB, userId));
+    case '/api/v1/reminders':    return json(await reminderList(env.DB, url, userId));
+    case '/api/v1/fuel-records': return json(await fuelRecordList(env.DB, url, userId));
+    case '/api/v1/maintenance':  return json(await maintenanceList(env.DB, url, userId));
     default:                     return new Response(JSON.stringify({ error: 'Not Found' }), { status: 404, headers: CORS_HEADERS });
   }
+}
+
+// 解析 API 调用者 → 有效 user_id（数据过滤用）。
+//  session cookie 有效 → 该用户；否则 ?token= 命中 ALLOWED_CHAT_ID → 管理员（其 user_id；
+//  未迁移则 undefined = 不过滤看全部，旧单用户 30 天过渡）；否则 401。
+async function resolveApiUser(
+  request: Request, env: { DB: D1Database; ALLOWED_CHAT_ID?: string; SESSION_KV: KVNamespace }
+): Promise<{ userId?: number } | Response> {
+  const session = await resolveSessionFromRequest(request, env.SESSION_KV);
+  if (session) return { userId: session.user_id };
+
+  const tokenErr = tokenAuth(request, env);
+  if (tokenErr) return tokenErr;
+  const admin = env.ALLOWED_CHAT_ID ? await getUserByTelegramId(env.DB, env.ALLOWED_CHAT_ID) : null;
+  return { userId: admin?.id };
 }
 
 // ── 分页参数解析 ──────────────────────────────────────────────────────────────
@@ -85,14 +102,14 @@ interface StatsPoint {
   distance: number | null;
 }
 
-async function fuelStats(db: D1Database, url: URL): Promise<{ records: StatsPoint[]; avg: number; totalKm: number; totalCost: number; totalLiters: number }> {
+async function fuelStats(db: D1Database, url: URL, userId?: number): Promise<{ records: StatsPoint[]; avg: number; totalKm: number; totalCost: number; totalLiters: number }> {
   const days = Math.max(1, Number(url.searchParams.get('days') ?? 30));
   const vehicle = url.searchParams.get('vehicle') || undefined;
   const since = new Date(Date.now() - days * 86400000).toISOString().slice(0, 10);
 
   const records = vehicle
-    ? await getFuelRecordsByVehicleName(db, since, vehicle)
-    : (await getFuelRecordsByDateRange(db, since, '2099-12-31')).sort((a, b) => a.odometer - b.odometer);
+    ? await getFuelRecordsByVehicleName(db, since, vehicle, userId)
+    : (await getFuelRecordsByDateRange(db, since, '2099-12-31', undefined, userId)).sort((a, b) => a.odometer - b.odometer);
 
   const points: StatsPoint[] = [];
   let totalKm = 0, totalCost = 0, totalLiters = 0, consumptionLiters = 0;
@@ -113,24 +130,28 @@ async function fuelStats(db: D1Database, url: URL): Promise<{ records: StatsPoin
   return { records: points, avg, totalKm: latestOdometer, totalCost, totalLiters };
 }
 
-async function getFuelRecordsByVehicleName(db: D1Database, since: string, vehicle: string): Promise<FuelRecord[]> {
+async function getFuelRecordsByVehicleName(db: D1Database, since: string, vehicle: string, userId?: number): Promise<FuelRecord[]> {
+  const extra = userId !== undefined ? ' AND f.user_id = ?' : '';
+  const binds = userId !== undefined ? [since, vehicle, vehicle, userId] : [since, vehicle, vehicle];
   const { results } = await db.prepare(
     `SELECT f.* FROM fuel_records f
        JOIN vehicles v ON f.vehicle_id = v.id
-      WHERE f.date >= ? AND f.deleted_at IS NULL AND (v.name = ? OR v.alias = ?)
+      WHERE f.date >= ? AND f.deleted_at IS NULL AND (v.name = ? OR v.alias = ?)${extra}
       ORDER BY f.odometer ASC`
-  ).bind(since, vehicle, vehicle).all<FuelRecord>();
+  ).bind(...binds).all<FuelRecord>();
   return results;
 }
 
 // 同上但按日期倒序，fuel-records 列表用
-async function getFuelRecordsByVehicleNameDesc(db: D1Database, since: string, vehicle: string): Promise<FuelRecord[]> {
+async function getFuelRecordsByVehicleNameDesc(db: D1Database, since: string, vehicle: string, userId?: number): Promise<FuelRecord[]> {
+  const extra = userId !== undefined ? ' AND f.user_id = ?' : '';
+  const binds = userId !== undefined ? [since, vehicle, vehicle, userId] : [since, vehicle, vehicle];
   const { results } = await db.prepare(
     `SELECT f.* FROM fuel_records f
        JOIN vehicles v ON f.vehicle_id = v.id
-      WHERE f.date >= ? AND f.deleted_at IS NULL AND (v.name = ? OR v.alias = ?)
+      WHERE f.date >= ? AND f.deleted_at IS NULL AND (v.name = ? OR v.alias = ?)${extra}
       ORDER BY f.date DESC, f.odometer DESC`
-  ).bind(since, vehicle, vehicle).all<FuelRecord>();
+  ).bind(...binds).all<FuelRecord>();
   return results;
 }
 
@@ -148,13 +169,15 @@ interface VehicleInfo {
   lastFuelDate: string | null;
 }
 
-async function vehicleList(db: D1Database): Promise<{ vehicles: VehicleInfo[] }> {
+async function vehicleList(db: D1Database, userId?: number): Promise<{ vehicles: VehicleInfo[] }> {
+  const extra = userId !== undefined ? ' AND v.user_id = ?' : '';
+  const binds = userId !== undefined ? [userId] : [];
   const { results } = await db.prepare(
     `SELECT v.name, v.alias, v.brand, v.model, v.fuel_type, v.tank_capacity, v.color,
             (SELECT odometer FROM fuel_records WHERE vehicle_id = v.id AND deleted_at IS NULL ORDER BY odometer DESC LIMIT 1) AS latestOdometer,
             (SELECT date     FROM fuel_records WHERE vehicle_id = v.id AND deleted_at IS NULL ORDER BY odometer DESC LIMIT 1) AS lastFuelDate
-       FROM vehicles v WHERE v.is_active = 1 ORDER BY v.id ASC`
-  ).all<VehicleInfo>();
+       FROM vehicles v WHERE v.is_active = 1${extra} ORDER BY v.id ASC`
+  ).bind(...binds).all<VehicleInfo>();
   return { vehicles: results };
 }
 
@@ -167,10 +190,10 @@ interface ReminderInfo {
   vehicle: string | null;
 }
 
-async function reminderList(db: D1Database, url: URL): Promise<{ reminders: ReminderInfo[]; total: number; page: number; totalPages: number }> {
+async function reminderList(db: D1Database, url: URL, userId?: number): Promise<{ reminders: ReminderInfo[]; total: number; page: number; totalPages: number }> {
   const vehicle = url.searchParams.get('vehicle') || undefined;
   const { page, limit } = parsePagination(url);
-  const reminders = await getActiveReminders(db);
+  const reminders = await getActiveReminders(db, userId);
   const filtered = vehicle
     ? reminders.filter(r => r.vehicle_name === vehicle)
     : reminders;
@@ -198,7 +221,7 @@ interface FuelRecordItem {
   distance: number | null;
 }
 
-async function fuelRecordList(db: D1Database, url: URL): Promise<{ records: FuelRecordItem[]; total: number; page: number; totalPages: number }> {
+async function fuelRecordList(db: D1Database, url: URL, userId?: number): Promise<{ records: FuelRecordItem[]; total: number; page: number; totalPages: number }> {
   const days = Math.max(1, Number(url.searchParams.get('days') ?? 30));
   const vehicle = url.searchParams.get('vehicle') || undefined;
   const { page, limit } = parsePagination(url);
@@ -206,8 +229,8 @@ async function fuelRecordList(db: D1Database, url: URL): Promise<{ records: Fuel
 
   // 直接按日期倒序取记录（列表不需要 fill-to-fill 油耗计算）
   const records = vehicle
-    ? await getFuelRecordsByVehicleNameDesc(db, since, vehicle)
-    : (await getFuelRecordsByDateRange(db, since, '2099-12-31')).sort((a, b) => b.date.localeCompare(a.date) || b.odometer - a.odometer);
+    ? await getFuelRecordsByVehicleNameDesc(db, since, vehicle, userId)
+    : (await getFuelRecordsByDateRange(db, since, '2099-12-31', undefined, userId)).sort((a, b) => b.date.localeCompare(a.date) || b.odometer - a.odometer);
 
   const items: FuelRecordItem[] = records.map(r => ({
     date: r.date,
@@ -233,15 +256,15 @@ interface MaintenanceRecordItem {
   note: string | null;
 }
 
-async function maintenanceList(db: D1Database, url: URL): Promise<{ records: MaintenanceRecordItem[]; total: number; page: number; totalPages: number }> {
+async function maintenanceList(db: D1Database, url: URL, userId?: number): Promise<{ records: MaintenanceRecordItem[]; total: number; page: number; totalPages: number }> {
   const vehicle = url.searchParams.get('vehicle') || undefined;
   const { page, limit } = parsePagination(url);
 
   let records: MaintenanceRecord[];
   if (vehicle) {
-    records = await getMaintenanceRecordsByVehicleName(db, vehicle);
+    records = await getMaintenanceRecordsByVehicleName(db, vehicle, userId);
   } else {
-    records = await getMaintenanceRecords(db, {});
+    records = await getMaintenanceRecords(db, { userId });
   }
 
   const mapped = records.map(r => ({
@@ -256,12 +279,14 @@ async function maintenanceList(db: D1Database, url: URL): Promise<{ records: Mai
   return { records: p.items, total: p.total, page: p.page, totalPages: p.totalPages };
 }
 
-async function getMaintenanceRecordsByVehicleName(db: D1Database, vehicle: string): Promise<MaintenanceRecord[]> {
+async function getMaintenanceRecordsByVehicleName(db: D1Database, vehicle: string, userId?: number): Promise<MaintenanceRecord[]> {
+  const extra = userId !== undefined ? ' AND m.user_id = ?' : '';
+  const binds = userId !== undefined ? [vehicle, vehicle, userId] : [vehicle, vehicle];
   const { results } = await db.prepare(
     `SELECT m.* FROM maintenance_records m
        JOIN vehicles v ON m.vehicle_id = v.id
-      WHERE v.is_active = 1 AND (v.name = ? OR v.alias = ?)
+      WHERE v.is_active = 1 AND (v.name = ? OR v.alias = ?)${extra}
       ORDER BY m.date DESC, m.id DESC`
-  ).bind(vehicle, vehicle).all<MaintenanceRecord>();
+  ).bind(...binds).all<MaintenanceRecord>();
   return results;
 }
