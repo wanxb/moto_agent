@@ -136,6 +136,13 @@ export const zh: Record<string, string> = {
   'lang.switched': '✅ 语言已切换为{0}。',
   'lang.unknown': '支持的语言：zh（中文）、en（English）。示例：/lang en',
 
+  // ── 内联键盘按钮 ──
+  'button.stats': '📊 本月统计',
+  'button.last': '🕐 最近记录',
+  'button.dashboard': '📊 Dashboard',
+  'button.lang_to_en': '🌐 English',
+  'button.lang_to_zh': '🌐 中文',
+
   // ── 快捷命令 ──
   'shortcut.last': '获取最近一次加油记录',
   'shortcut.stats': '查询本月油耗统计',

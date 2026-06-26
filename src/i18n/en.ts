@@ -135,6 +135,13 @@ export const en: Record<string, string> = {
   'lang.switched': '✅ Language switched to {0}.',
   'lang.unknown': 'Supported languages: zh (中文), en (English). E.g. /lang en',
 
+  // ── Inline Keyboard Buttons ──
+  'button.stats': '📊 Monthly Stats',
+  'button.last': '🕐 Last Record',
+  'button.dashboard': '📊 Dashboard',
+  'button.lang_to_en': '🌐 English',
+  'button.lang_to_zh': '🌐 中文',
+
   // ── Shortcut commands ──
   'shortcut.last': 'Get the most recent fuel record',
   'shortcut.stats': 'Query this month\'s fuel statistics',

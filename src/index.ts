@@ -1,4 +1,4 @@
-import { Bot, webhookCallback } from 'grammy';
+import { Bot, webhookCallback, InlineKeyboard } from 'grammy';
 import { Env } from './types';
 import type { Lang } from './i18n/types';
 import { t, setLang, getLang, detectLang } from './i18n';
@@ -31,6 +31,17 @@ function makeHelp(lang: Lang): string {
   return t('help.title', lang) + t('help.body', lang);
 }
 
+/** 按语言构建内联键盘按钮（快捷方式） */
+function buildKeyboard(lang: Lang): InlineKeyboard {
+  const langBtn = lang === 'zh' ? 'button.lang_to_en' : 'button.lang_to_zh';
+  return new InlineKeyboard()
+    .text(t('button.stats', lang),     'stats')
+    .text(t('button.last', lang),      'last')
+    .row()
+    .text(t('button.dashboard', lang), 'dashboard')
+    .text(t(langBtn, lang),            `lang:${lang}`);
+}
+
 /** 从 KV 读取语言偏好，KV 未设置时回退到 Telegram language_code，再回退到 zh */
 async function resolveLang(env: Env, chatId: string, languageCode?: string): Promise<Lang> {
   const stored = await getLang(env.SESSION_KV, chatId);
@@ -41,17 +52,24 @@ async function resolveLang(env: Env, chatId: string, languageCode?: string): Pro
 function createBot(env: Env): Bot {
   const bot = new Bot(env.TELEGRAM_BOT_TOKEN);
 
+  // 诊断日志：记录所有 update 类型
+  bot.use(async (ctx, next) => {
+    const types = Object.keys(ctx.update).filter(k => k !== 'update_id');
+    console.log('[update] types=', types.join(','));
+    await next();
+  });
+
   // 开放自助（spec 016 修订）：去掉 ALLOWED_CHAT_ID 白名单门控，任何 TG 用户均可使用。
   // 用户首次发消息时由管道 resolveUserId 自动建号，数据按 user_id 隔离；成本由每用户限流兜底。
   // 端点本身仍受 webhook secret 保护。
 
   bot.command('start', async ctx => {
     const lang = await resolveLang(env, ctx.chat!.id.toString(), ctx.from?.language_code);
-    await ctx.reply(makeWelcome(lang));
+    await ctx.reply(makeWelcome(lang), { reply_markup: buildKeyboard(lang) });
   });
   bot.command('help', async ctx => {
     const lang = await resolveLang(env, ctx.chat!.id.toString(), ctx.from?.language_code);
-    await ctx.reply(makeHelp(lang));
+    await ctx.reply(makeHelp(lang), { reply_markup: buildKeyboard(lang) });
   });
 
   bot.command('last', async ctx => {
@@ -131,6 +149,56 @@ function createBot(env: Env): Bot {
       return;
     }
     await ctx.reply(t('bind.link_sent', lang, email));
+  });
+
+  // ── 内联键盘回调处理 ──
+
+  bot.on('callback_query:data', async ctx => {
+    const data = ctx.callbackQuery!.data!;
+    console.log('[callback] received:', data);
+
+    // 先消除加载动画
+    try {
+      await ctx.answerCallbackQuery();
+    } catch (e) {
+      console.error('[callback] answerCallbackQuery failed:', e instanceof Error ? e.message : String(e));
+    }
+
+    try {
+      if (data === 'stats') {
+        const app = bootstrap(env);
+        const adapter = new TelegramAdapter(ctx, env);
+        const lang = await resolveLang(env, ctx.chat!.id.toString(), ctx.from?.language_code);
+        await app.run(adapter, { text: t('shortcut.stats', lang) });
+      } else if (data === 'last') {
+        const app = bootstrap(env);
+        const adapter = new TelegramAdapter(ctx, env);
+        const lang = await resolveLang(env, ctx.chat!.id.toString(), ctx.from?.language_code);
+        await app.run(adapter, { text: t('shortcut.last', lang) });
+      } else if (data === 'dashboard') {
+        const origin = siteOrigin(env);
+        const chatId = ctx.chat!.id.toString();
+        const lang = await resolveLang(env, chatId, ctx.from?.language_code);
+        const token = await signAutoLoginToken(chatId, env.TELEGRAM_WEBHOOK_SECRET);
+        const link = `${origin}/auth/auto-login?t=${encodeURIComponent(token)}`;
+        await ctx.reply(t('dashboard.link', lang, link), { parse_mode: 'HTML' });
+      } else if (data === 'lang:zh' || data === 'lang:en') {
+        const currentLang = data.split(':')[1] as Lang;
+        const newLang: Lang = currentLang === 'zh' ? 'en' : 'zh';
+        const chatId = ctx.chat!.id.toString();
+        await setLang(env.SESSION_KV, chatId, newLang);
+        const app = bootstrap(env);
+        await app.session.clear(chatId);
+        const langName = newLang === 'zh' ? '中文' : 'English';
+        await ctx.reply(t('lang.switched', newLang, langName));
+        await ctx.reply(makeWelcome(newLang), { reply_markup: buildKeyboard(newLang) });
+      } else {
+        console.log('[callback] unknown data:', data);
+      }
+    } catch (e) {
+      console.error('[callback] handler error:', e instanceof Error ? e.stack : String(e));
+      await ctx.reply(t('general.fallback_error', 'zh'));
+    }
   });
 
   bot.on('message:text', async ctx => {
@@ -228,6 +296,28 @@ export default {
         return handleChatRequest(request, env);
       }
 
+      // ── 一次性：修复 webhook allowed_updates（加 callback_query）────────────
+      if (url.pathname === '/setup-webhook') {
+        const bot = new Bot(env.TELEGRAM_BOT_TOKEN);
+        try {
+          const info = await bot.api.getWebhookInfo();
+          const hookUrl = info.url || url.origin + '/telegram-webhook';
+          const result = await bot.api.setWebhook(hookUrl, {
+            secret_token: env.TELEGRAM_WEBHOOK_SECRET,
+            allowed_updates: ['message', 'callback_query'],
+          });
+          return new Response(JSON.stringify({ ok: true, was: info.allowed_updates, now: result }), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          });
+        } catch (e) {
+          return new Response(JSON.stringify({ ok: false, error: String(e) }), {
+            status: 500,
+            headers: { 'Content-Type': 'application/json' },
+          });
+        }
+      }
+
       // ── 静态资源 / SPA（spec 016 / ADR-0010）──────────────────────────────
       // 动态路由（上面）已先行处理；其余 GET 交给 [assets]（SPA fallback 到 index.html）。
       // 测试环境无 ASSETS 绑定（wrangler.test.toml 未配），跳过以保留原行为。
@@ -249,7 +339,9 @@ export default {
 
       // grammY webhook 内未捕获的错误兜底
       try {
-        return await handle(request);
+        const res = await handle(request);
+        console.log('[webhook] response status:', res.status);
+        return res;
       } catch (e) {
         const msg = e instanceof Error ? e.stack : String(e);
         console.error('[webhook] grammY error:', msg);

@@ -4,7 +4,7 @@
 
 import type { Env } from '../types';
 import type { Lang } from '../i18n/types';
-import { t } from '../i18n';
+import { t, getLang } from '../i18n';
 import { MAGIC_LINK_TTL } from '../config';
 import { pushPwaNotice } from './chat-api';
 import { checkRateLimit, RULES } from '../gateway/rate-limiter';
@@ -13,7 +13,7 @@ import {
   createSession, destroySession, parseSessionToken, buildSessionCookie, clearSessionCookie,
 } from '../services/session';
 import {
-  getUserByEmail, getUserById, createUser, updateUserLastLogin, bindTelegramToUser,
+  getUserByEmail, getUserById, createUser, updateUserLastLogin, updateUserLang, bindTelegramToUser,
   getOrCreateTelegramUser,
 } from '../database';
 import { verifyAutoLoginToken } from '../services/auto-login';
@@ -212,10 +212,17 @@ async function autoLogin(request: Request, env: Env): Promise<Response> {
   const userId = await getOrCreateTelegramUser(env.DB, telegramId);
   await updateUserLastLogin(env.DB, userId, new Date().toISOString());
 
+  // 将 Telegram bot 中的语言偏好同步到 PWA：KV → DB + URL 参数
+  const tgLang = await getLang(env.SESSION_KV, telegramId);
+  if (tgLang) {
+    await updateUserLang(env.DB, userId, tgLang);
+  }
+
+  const langParam = tgLang ? `&lang=${tgLang}` : '';
   const sToken = await createSession(env.SESSION_KV, { user_id: userId, email: null });
   return new Response(null, {
     status: 302,
-    headers: { Location: `${baseUrl(request, env)}/dashboard?from=tg`, 'Set-Cookie': buildSessionCookie(sToken) },
+    headers: { Location: `${baseUrl(request, env)}/dashboard?from=tg${langParam}`, 'Set-Cookie': buildSessionCookie(sToken) },
   });
 }
 

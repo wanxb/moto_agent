@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
-  import { getLang, tr } from '../lib/i18n';
+  import { getLang, setLang, tr } from '../lib/i18n';
   import { apiJson } from '../lib/api';
   import { getMe } from '../lib/session';
   import Chart from 'chart.js/auto';
@@ -45,6 +45,8 @@
     fromTg = new URLSearchParams(location.search).get('from') === 'tg';
     const me = await getMe();
     if (!me) { location.href = '/login'; return; }
+    // 将服务端语言偏好同步到本地（URL 参数优先，已在 getLang 中处理）
+    if (me.lang === 'en' || me.lang === 'zh') setLang(me.lang);
     try {
       const v = await apiJson<{ vehicles: Vehicle[] }>('/api/v1/vehicles');
       vehicles = v.vehicles ?? [];
