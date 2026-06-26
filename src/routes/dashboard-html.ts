@@ -11,8 +11,7 @@ export function dashboardPage(tokenHint?: string, lang?: string): string {
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
-<script>document.write('<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js?t=' + Date.now() + '"><\/script>');</script>
-<link rel="icon" type="image/png" href="${favicon}">
+<link rel="icon" type="image/svg+xml" href="${favicon}">
 <title>Moto Agent Dashboard</title>
 <style>
 :root {
