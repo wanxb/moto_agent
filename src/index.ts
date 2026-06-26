@@ -16,9 +16,10 @@ import { sendBindLinkEmail } from './services/mail';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-/** 站点 origin（用于拼绝对链接）。DASHBOARD_URL 可能带 /dashboard 路径，取其 origin 即可。 */
+/** 站点 origin：WORKER_ORIGIN 优先（保证 KV 一致性），否则 DASHBOARD_URL 的 origin。 */
 function siteOrigin(env: Env): string {
-  if (env.DASHBOARD_URL) { try { return new URL(env.DASHBOARD_URL).origin; } catch { /* 忽略，回退空 */ } }
+  if (env.WORKER_ORIGIN) return env.WORKER_ORIGIN.replace(/\/$/, '');
+  if (env.DASHBOARD_URL) { try { return new URL(env.DASHBOARD_URL).origin; } catch { /* ignore */ } }
   return '';
 }
 
@@ -83,10 +84,6 @@ function createBot(env: Env): Bot {
 
   bot.command('dashboard', async ctx => {
     const origin = siteOrigin(env);
-    if (!origin) {
-      const lang = await resolveLang(env, ctx.chat!.id.toString(), ctx.from?.language_code);
-      return ctx.reply(t('dashboard.no_url', lang));
-    }
     const chatId = ctx.chat.id.toString();
     const lang = await resolveLang(env, chatId, ctx.from?.language_code);
 
