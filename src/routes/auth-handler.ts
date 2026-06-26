@@ -3,7 +3,10 @@
 // 唯一的服务端 HTML 是 GET /auth/verify 的确认页（防邮件安全网关预取一次性 token，见 design §3.1）。
 
 import type { Env } from '../types';
+import type { Lang } from '../i18n/types';
+import { t } from '../i18n';
 import { MAGIC_LINK_TTL } from '../config';
+import { pushPwaNotice } from './chat-api';
 import { checkRateLimit, RULES } from '../gateway/rate-limiter';
 import { sendMagicLinkEmail } from '../services/mail';
 import {
@@ -171,10 +174,21 @@ async function bindConsume(request: Request, env: Env): Promise<Response> {
   }
   if (!user) return html(500, page('绑定失败', '账号创建异常，请稍后重试。'));
 
+  let mergeRes: { merged: boolean; duplicateNames: string[] };
   try {
-    await bindTelegramToUser(env.DB, rec.email, rec.telegram_id);   // 含账号合并（情形 B）
+    mergeRes = await bindTelegramToUser(env.DB, rec.email, rec.telegram_id);   // 含账号合并（情形 B）
   } catch (e) {
     return html(400, page('绑定失败', e instanceof Error ? e.message : '绑定失败，请稍后重试。'));
+  }
+
+  // 合并是并集不去重：若两端各有同名车，提示用户去处理（选项 3，design §3.2）。
+  if (mergeRes.duplicateNames.length) {
+    const lang: Lang = user.lang === 'en' ? 'en' : 'zh';
+    const sep = lang === 'en' ? ', ' : '、';
+    await pushPwaNotice(
+      env, user.id,
+      t('bind.merge_dups', lang, String(mergeRes.duplicateNames.length), mergeRes.duplicateNames.join(sep)),
+    );
   }
 
   await updateUserLastLogin(env.DB, user.id, new Date().toISOString());

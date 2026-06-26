@@ -26,6 +26,7 @@ export const zh: Record<string, string> = {
   'bind.rate_limited': '操作太频繁，请稍后再试 🕐',
   'bind.mail_failed': '验证链接发送失败，请稍后重试。',
   'bind.link_sent': '✅ 验证链接已发送到 {0}，点击邮件中的链接完成绑定（10 分钟内有效）。',
+  'bind.merge_dups': '🔗 账号已合并。检测到 {0} 处可能重复的车辆（{1}）——两边各建过同名车。可在车辆管理查看，或对我说"把重复的车合并一下"。',
 
   // ── 属性标签 ──
   'attr.brand': '品牌',
@@ -58,7 +59,7 @@ export const zh: Record<string, string> = {
   'fuel.first_record': '📊 首次记录，下次加油后将显示油耗',
   'fuel.consumption': '📊 本次油耗：{0} L/100km（距上次 {1} km）',
   'fuel.odometer_anomaly': '里程 {0} km 比上一条记录还低，是否里程录入有误？请确认。',
-  'fuel.stats_title': '📊 {0}',
+  'fuel.stats_title': '📊 {0} · 油耗统计',
   'fuel.stats_title_default': '📊 油耗统计',
   'fuel.only_one': '只有 1 条记录，需要至少 2 条才能计算区间油耗。',
   'fuel.data_abnormal': '数据异常，无法计算。',
@@ -94,6 +95,8 @@ export const zh: Record<string, string> = {
   'maint.last_title': '🔧 最近一次「{0}」{1}',
   'maint.list_title': '🔧 {0}',
   'maint.list_title_default': '🔧 保养记录',
+  'maint.list_title_vehicle': '🔧 {0} · {1}',
+  'maint.records_word': '保养记录',
 
   // ── 提醒工具 ──
   'reminder.mileage_need': '里程提醒需要给"间隔公里数"或"目标里程"其中之一。',

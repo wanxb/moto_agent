@@ -4,6 +4,7 @@
 
 import type { Env, Message } from '../types';
 import type { Lang } from '../i18n/types';
+import { t } from '../i18n';
 import { bootstrap } from '../bootstrap';
 import { resolveSessionFromRequest } from '../services/session';
 import { getUserById } from '../database';
@@ -26,6 +27,13 @@ async function getHistory(env: Env, userId: number): Promise<Message[]> {
 }
 async function setHistory(env: Env, userId: number, msgs: Message[]): Promise<void> {
   await env.SESSION_KV.put(histKey(userId), JSON.stringify(msgs), { expirationTtl: PWA_HISTORY_TTL });
+}
+
+/** 往 PWA 对话历史追加一条 assistant 通知（如绑定合并提示），用户进 /chat 即见。供 auth-handler 调用。 */
+export async function pushPwaNotice(env: Env, userId: number, text: string): Promise<void> {
+  const history = await getHistory(env, userId);
+  history.push({ role: 'assistant', content: text });
+  await setHistory(env, userId, trimHistory(history, MAX_SESSION_MESSAGES));
 }
 
 // 只把 user / 有内容的 assistant 暴露给前端渲染（tool 消息、空 assistant 不显示）。
@@ -98,7 +106,7 @@ export async function handleChatRequest(request: Request, env: Env): Promise<Res
       console.error('[chat] stt error:', e instanceof Error ? e.message : String(e));
       return json(502, { error: 'stt_failed' });
     }
-    if (!textIn) return json(200, { text: '', reply: lang === 'en' ? "Didn't catch that, please try again or type." : '没听清，请再录一次或直接打字。' });
+    if (!textIn) return json(200, { text: '', reply: t('general.no_voice_text', lang) });
 
     try {
       return json(200, { text: textIn, reply: await runChat(env, userId, textIn) });

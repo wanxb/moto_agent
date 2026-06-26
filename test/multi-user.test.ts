@@ -2,7 +2,7 @@ import { describe, it, expect, beforeAll, beforeEach } from 'vitest';
 import { env } from 'cloudflare:test';
 import {
   createUser, getUserById, getUserByEmail, getUserByTelegramId, updateUserLastLogin,
-  getOrCreateTelegramUser, bindTelegramToUser,
+  getOrCreateTelegramUser, bindTelegramToUser, findDuplicateVehicleNames,
   insertFuelRecord, insertMileageRecord, insertMaintenanceRecord, insertReminder,
   getLastFuelRecord, getRecentFuelRecords, getFuelRecordsByDateRange, findFuelRecords,
   getMaintenanceRecords, findMaintenanceRecords, getLatestOdometer,
@@ -175,6 +175,21 @@ describe('bindTelegramToUser', () => {
     expect(old!.status).toBe('merged');
     expect(old!.telegram_id).toBeNull();
     expect((await getUserByTelegramId(env.DB, '999'))!.id).toBe(e);
+  });
+
+  it('合并并集不去重 — 两端同名车 → duplicateNames 上报（选项 3）', async () => {
+    const e = await createUser(env.DB, { email: 'e@x.com' });
+    const tg = await createUser(env.DB, { telegramId: '999' });
+    await insertVehicle(env.DB, '小绿', { userId: e });   // PWA 侧已有「小绿」
+    await insertVehicle(env.DB, '小绿', { userId: tg });  // TG 侧也建过「小绿」
+    await insertVehicle(env.DB, '小蓝', { userId: tg });  // 不重复的
+
+    const res = await bindTelegramToUser(env.DB, 'e@x.com', '999');
+    expect(res.merged).toBe(true);
+    expect(res.duplicateNames).toEqual(['小绿']);          // 仅同名的上报，小蓝不报
+    // 并集不去重：合并后 e 名下有两辆「小绿」
+    expect((await listVehicles(env.DB, e)).filter(v => v.name === '小绿').length).toBe(2);
+    expect(await findDuplicateVehicleNames(env.DB, e)).toEqual(['小绿']);
   });
 
   it('幂等 — 重复绑定同账号不报错、不合并', async () => {

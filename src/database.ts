@@ -61,10 +61,12 @@ export async function getOrCreateTelegramUser(
 // 绑定 Telegram 到邮箱账号（spec 016 §3.2）。调用方应已校验绑定码。
 //   情形 A：该 telegram_id 尚无独立账号 → 直接挂到邮箱账号。
 //   情形 B（账号合并）：telegram_id 已有独立账号 → 其名下数据迁到邮箱账号、旧号置 'merged' 失活。
-// 合并在一个 D1 batch 内原子完成（任一步失败整体回滚）。返回是否发生了合并。
+// 合并在一个 D1 batch 内原子完成（任一步失败整体回滚）。
+// 返回 { merged, duplicateNames }：merged=是否发生合并；duplicateNames=合并后该用户名下
+// 同名活跃车辆（说明两端各自建过同名车，合并是并集不去重，交由用户处理，见 design §3.2）。
 export async function bindTelegramToUser(
   db: D1Database, email: string, telegramId: string
-): Promise<{ merged: boolean }> {
+): Promise<{ merged: boolean; duplicateNames: string[] }> {
   const target = await getUserByEmail(db, email);
   if (!target) throw new Error('bindTelegramToUser: email 账号不存在');
   // 目标邮箱已绑到别的 Telegram → 拒绝
@@ -73,12 +75,12 @@ export async function bindTelegramToUser(
   }
 
   const existing = await getUserByTelegramId(db, telegramId);
-  if (existing && existing.id === target.id) return { merged: false };  // 幂等
+  if (existing && existing.id === target.id) return { merged: false, duplicateNames: [] };  // 幂等
 
   if (!existing) {
     // 情形 A：直接挂载
     await db.prepare('UPDATE users SET telegram_id = ? WHERE id = ?').bind(telegramId, target.id).run();
-    return { merged: false };
+    return { merged: false, duplicateNames: [] };
   }
 
   // 情形 B：把 existing(U_t) 名下数据迁到 target(E)，U_t 失活。
@@ -93,7 +95,16 @@ export async function bindTelegramToUser(
     db.prepare("UPDATE users SET status = 'merged' WHERE id = ?").bind(existing.id),
     db.prepare('UPDATE users SET telegram_id = ? WHERE id = ?').bind(telegramId, target.id),
   ]);
-  return { merged: true };
+  return { merged: true, duplicateNames: await findDuplicateVehicleNames(db, target.id) };
+}
+
+// 合并后检测同名活跃车辆（两端各建过同名车 → 合并成并集，可能重复）。返回去重后的车名列表。
+export async function findDuplicateVehicleNames(db: D1Database, userId: number): Promise<string[]> {
+  const { results } = await db.prepare(
+    `SELECT name FROM vehicles WHERE user_id = ? AND is_active = 1
+      GROUP BY name HAVING COUNT(*) > 1 ORDER BY name`
+  ).bind(userId).all<{ name: string }>();
+  return results.map(r => r.name);
 }
 
 // ── Fuel / mileage records ────────────────────────────────────────────────────

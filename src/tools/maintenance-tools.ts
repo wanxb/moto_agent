@@ -98,7 +98,7 @@ export class QueryMaintenanceTool implements Tool {
     }
     const lines = records.map(m => `${m.date}  ${m.type}  ${fmtKm(m.odometer, lang)}  ${fmtCost(m.cost, lang)}`);
     const title = vehicleName
-      ? (lang === 'en' ? `🔧 ${vehicleName} · ${type || 'Maintenance Records'}` : `🔧 ${vehicleName} · ${type || '保养记录'}`)
+      ? t('maint.list_title_vehicle', lang, vehicleName, type || t('maint.records_word', lang))
       : (type ? t('maint.list_title', lang, type) : t('maint.list_title_default', lang));
     return [title, '─'.repeat(32), ...lines].join('\n');
   }

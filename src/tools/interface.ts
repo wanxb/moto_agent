@@ -1,5 +1,6 @@
 import type { ToolDefinition } from '../types';
 import type { Lang } from '../i18n/types';
+import { t } from '../i18n';
 
 // ── Tool 接口：每个工具 = name + JSON Schema + execute ──────────────────────
 // 新增工具只需实现此接口并调用 registry.register()，不改 Registry 也不改 dispatch。
@@ -53,7 +54,7 @@ export class ToolRegistry {
   /** 按 name 分发执行（userId 注入当前用户，spec 016） */
   async dispatch(name: string, input: Record<string, unknown>, db: D1Database, lang: Lang = 'zh', userId?: number): Promise<string> {
     const tool = this.get(name);
-    if (!tool) return lang === 'en' ? `Unknown tool: ${name}` : `未知工具：${name}`;
+    if (!tool) return t('general.unknown_tool', lang, name);
     return tool.execute(input, db, lang, userId);
   }
 }

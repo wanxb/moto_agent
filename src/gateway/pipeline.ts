@@ -37,12 +37,18 @@ export async function runPipeline(
     // 1. 提取用户
     const userId = adapter.extractUser(raw);
 
+    // 1.5 语言检测（提前到限流/提示之前，保证所有回复都遵循用户语言，不再写死中文）
+    let lang: Lang = 'zh';
+    if (adapter.detectLanguage) {
+      lang = await adapter.detectLanguage();
+    }
+
     // 2. 限流（保护最贵的资源——LLM 调用）
     const rule = ctx.rateLimitRule ?? RULES['chat:per-user'];
     const limit = await checkRateLimit(ctx.kv, `rate:user:${userId}:chat`, rule);
     if (!limit.allowed) {
       const wait = limit.resetAt - Math.floor(Date.now() / 1000);
-      await adapter.reply(userId, `消息有点频繁，请等 ${wait} 秒再发 🕐`);
+      await adapter.reply(userId, t('general.rate_limit', lang, String(wait)));
       return null;
     }
 
@@ -52,14 +58,8 @@ export async function runPipeline(
     // 4. 提取文本
     const text = await adapter.extractText(raw);
     if (!text) {
-      await adapter.reply(userId, '没听清，请再说一遍或直接打字。');
+      await adapter.reply(userId, t('general.no_voice_text', lang));
       return null;
-    }
-
-    // 4.5 语言检测（可选）
-    let lang: Lang = 'zh';
-    if (adapter.detectLanguage) {
-      lang = await adapter.detectLanguage();
     }
 
     // 5. 会话 + Agent（解析当前用户 → 注入 user_id 实现数据隔离）

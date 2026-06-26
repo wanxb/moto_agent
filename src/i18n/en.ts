@@ -26,6 +26,7 @@ export const en: Record<string, string> = {
   'bind.rate_limited': 'Too many attempts, please try again later 🕐',
   'bind.mail_failed': 'Failed to send the verification link, please retry.',
   'bind.link_sent': '✅ A verification link was sent to {0}. Click it to finish binding (valid for 10 min).',
+  'bind.merge_dups': '🔗 Account merged. Found {0} possibly-duplicate vehicle(s) ({1}) — both sides had the same name. Check Vehicles, or tell me to merge the duplicates.',
 
   // ── Attribute labels ──
   'attr.brand': 'Brand',
@@ -58,7 +59,7 @@ export const en: Record<string, string> = {
   'fuel.first_record': '📊 First record — fuel consumption will show after next fill-up.',
   'fuel.consumption': '📊 Fuel consumption: {0} L/100km ({1} km since last)',
   'fuel.odometer_anomaly': 'Odometer {0} km is lower than the previous record — is this correct? Please verify.',
-  'fuel.stats_title': '📊 {0}',
+  'fuel.stats_title': '📊 {0} · Fuel Statistics',
   'fuel.stats_title_default': '📊 Fuel Statistics',
   'fuel.only_one': 'Only 1 record — need at least 2 to calculate consumption.',
   'fuel.data_abnormal': 'Data anomaly — cannot calculate.',
@@ -94,6 +95,8 @@ export const en: Record<string, string> = {
   'maint.last_title': '🔧 Last "{0}"{1}',
   'maint.list_title': '🔧 {0}',
   'maint.list_title_default': '🔧 Maintenance Records',
+  'maint.list_title_vehicle': '🔧 {0} · {1}',
+  'maint.records_word': 'Maintenance Records',
 
   // ── Reminders ──
   'reminder.mileage_need': 'Mileage reminders need either an interval or a target odometer.',

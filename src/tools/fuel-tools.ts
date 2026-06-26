@@ -144,7 +144,7 @@ export class QueryStatsTool implements Tool {
 
     const avg = (totalLiters / totalKm * 100).toFixed(2);
     const title = vehicleName
-      ? (lang === 'en' ? `📊 ${vehicleName} · Fuel Statistics` : `📊 ${vehicleName} · 油耗统计`)
+      ? t('fuel.stats_title', lang, vehicleName)
       : t('fuel.stats_title_default', lang);
     return [
       title,
