@@ -55,48 +55,50 @@ export async function runScheduled(
   let fired = 0;
 
   for (const r of due) {
-    // 属主：决定推送语言 + telegram_id 回退（spec 016 T10B）
     const owner = r.user_id != null ? await getUserById(env.DB, r.user_id) : null;
     const lang: Lang = owner?.lang === 'en' ? 'en' : 'zh';
-    // 推送目标：reminders.chat_id → 属主 users.telegram_id → （仅无属主的历史提醒）ALLOWED_CHAT_ID。
+    const text = formatReminder(r, null, lang, r.remind_count + 1);
+
     const tgTarget = r.chat_id
       ?? owner?.telegram_id
       ?? (r.user_id == null ? env.ALLOWED_CHAT_ID : undefined);
 
-    // 无 TG 目标但有属主 → 把提醒推进 PWA 对话历史，用户下次打开 /chat 即见。
-    if (!tgTarget && r.user_id != null) {
+    // 两端同时推，不互斥：TG（有目标时）+ PWA 对话历史（有所属用户时）。
+    let pushed = false;
+
+    // ── Telegram ──
+    if (tgTarget) {
       try {
-        const text = formatReminder(r, null, lang, r.remind_count + 1);
+        await send(tgTarget, text);
+        pushed = true;
+      } catch (e) {
+        console.error(`[cron] TG push failed for reminder ${r.id}:`, e instanceof Error ? e.message : String(e));
+      }
+    }
+
+    // ── PWA 对话历史 ──
+    if (r.user_id != null) {
+      try {
         await pushPwaNotice(env, r.user_id, text);
-        await incrementRemindCount(env.DB, r.id);
-        if (r.remind_count + 1 >= 3) {
-          await markReminderDone(env.DB, r.id, today);
-        }
-        fired++;
-        console.log(`[cron] reminder ${r.id} PWA 对话内通知（user=${r.user_id}）`);
+        pushed = true;
+        console.log(`[cron] reminder ${r.id} PWA 通知（user=${r.user_id}）`);
       } catch (e) {
         console.error(`[cron] PWA push failed for reminder ${r.id}:`, e instanceof Error ? e.message : String(e));
       }
+    }
+
+    if (!pushed) {
+      console.log(`[cron] reminder ${r.id} 无推送通道，跳过`);
       continue;
     }
 
-    if (!tgTarget) {
-      console.log(`[cron] reminder ${r.id} 无推送目标，跳过`);
-      continue;
+    // 推送成功后（任一通道即算）：计数+1；满 3 次标记完成。
+    await incrementRemindCount(env.DB, r.id);
+    if (r.remind_count + 1 >= 3) {
+      await markReminderDone(env.DB, r.id, today);
+      console.log(`[cron] reminder ${r.id} 第${r.remind_count + 1}次提醒后完成`);
     }
-    try {
-      await send(tgTarget, formatReminder(r, null, lang, r.remind_count + 1));
-      // 推送成功后：计数+1；满 3 次则标记完成（不再推送），否则保持活跃供下次 cron 再提醒。
-      // 续期不再在此触发——只在用户记录保养时（log_maintenance → renewReminderAfterMaintenance）自动创建下一个提醒。
-      await incrementRemindCount(env.DB, r.id);
-      if (r.remind_count + 1 >= 3) {
-        await markReminderDone(env.DB, r.id, today);
-        console.log(`[cron] reminder ${r.id} 第${r.remind_count + 1}次提醒后完成（不再推送）`);
-      }
-      fired++;
-    } catch (e) {
-      console.error(`[cron] push failed for reminder ${r.id}:`, e instanceof Error ? e.message : String(e));
-    }
+    fired++;
   }
 
   console.log(`[cron] scanned ${due.length} due, fired ${fired}`);
