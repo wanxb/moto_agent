@@ -34,6 +34,10 @@ directory = "./web/dist"
 binding = "ASSETS"
 not_found_handling = "single-page-application"
 
+# 非密钥环境变量（spec 016 多用户发信）
+[vars]
+SENDER_EMAIL = "noreply@bbing.xyz"
+
 # Secrets are set via: wrangler secret put SECRET_NAME
 # Required secrets:
 #   TELEGRAM_BOT_TOKEN
@@ -41,3 +45,5 @@ not_found_handling = "single-page-application"
 #   DEEPSEEK_API_KEY
 #   ANTHROPIC_API_KEY
 #   ALLOWED_CHAT_ID
+#   DASHBOARD_URL
+#   RESEND_API_KEY
