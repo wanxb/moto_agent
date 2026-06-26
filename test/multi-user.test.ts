@@ -2,7 +2,7 @@ import { describe, it, expect, beforeAll, beforeEach } from 'vitest';
 import { env } from 'cloudflare:test';
 import {
   createUser, getUserById, getUserByEmail, getUserByTelegramId, updateUserLastLogin,
-  bindTelegramToUser,
+  getOrCreateTelegramUser, bindTelegramToUser,
   insertFuelRecord, insertMileageRecord, insertMaintenanceRecord, insertReminder,
   getLastFuelRecord, getRecentFuelRecords, getFuelRecordsByDateRange, findFuelRecords,
   getMaintenanceRecords, findMaintenanceRecords, getLatestOdometer,
@@ -39,6 +39,27 @@ describe('user CRUD', () => {
     const id = await createUser(env.DB, { email: 'b@x.com' });
     await updateUserLastLogin(env.DB, id, '2026-06-26T00:00:00Z');
     expect((await getUserById(env.DB, id))!.last_login).toBe('2026-06-26T00:00:00Z');
+  });
+});
+
+// ── 开放自助：TG 用户首次发消息自动建号（spec 016 修订）────────────────────────
+
+describe('getOrCreateTelegramUser (open self-service)', () => {
+  it('creates a TG-only user on first contact, then returns the same id', async () => {
+    const id1 = await getOrCreateTelegramUser(env.DB, '99001', 'en');
+    const u = await getUserById(env.DB, id1);
+    expect(u!.telegram_id).toBe('99001');
+    expect(u!.email).toBeNull();              // 邮箱另走注册入口
+    expect(u!.lang).toBe('en');               // 跟随会话语言
+
+    const id2 = await getOrCreateTelegramUser(env.DB, '99001', 'zh');
+    expect(id2).toBe(id1);                     // 幂等，不重复建号
+  });
+
+  it('different chat_ids get isolated user ids', async () => {
+    const a = await getOrCreateTelegramUser(env.DB, '111');
+    const b = await getOrCreateTelegramUser(env.DB, '222');
+    expect(a).not.toBe(b);
   });
 });
 

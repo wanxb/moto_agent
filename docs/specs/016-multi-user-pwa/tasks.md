@@ -92,16 +92,23 @@
   - 验证：模拟录音上传 → 得到文字回复
   - 验证：浏览器权限拒绝 → 按钮置灰提示
 
-### T7 Telegram 绑定 `/bind`
+### T7 Telegram 绑定 `/bind` + 开放自助访问
 
-- [ ] **T7.1** 在 `bot.on('message:text')` 之前新增 `/bind` 命令 handler：
+> **访问模型修订（2026-06-26）**：去掉 `ALLOWED_CHAT_ID` 白名单门控，改为**开放自助**——任何 TG 用户首次发消息即由管道 `resolveUserId → getOrCreateTelegramUser` 自动建号，数据按 `user_id` 隔离。`/bind` 因此以**账号合并**（情形 B）为常见路径。成本仅靠每用户限流兜底，无总量配额（见 design 安全章风险）。
+
+- [x] **T7.0** 开放自助接线（原 T5-D）：
+  - `database.ts` 新增 `getOrCreateTelegramUser`（幂等 + 并发撞 UNIQUE 回查）
+  - `pipeline.ts` `PipelineContext` 加 `resolveUserId` 钩子，注入 agent 实现隔离
+  - `bootstrap.ts` 接上 `resolveUserId`（空标识 → undefined，保单用户兼容）
+  - `index.ts` 移除白名单中间件（端点仍受 webhook secret 保护）
+- [x] **T7.1** 在 `bot.on('message:text')` 之前新增 `/bind` 命令 handler：
   - 参数校验（邮箱格式）
   - **前置检查**：`getUserByEmail` 不存在 → 回复"请先在 PWA 用该邮箱注册后再绑定"，不发码
-  - `email+IP` 限流
+  - `email+chatId` 限流（TG 无 IP）
   - 生成 6 位验证码 → 存 `bind_code:{email}`（值含 `telegram_id`，10 分钟 TTL）
   - 通过 **Resend** 发验证码邮件
   - 回复用户"验证码已发送到邮箱"
-- [ ] **T7.2** 实现验证码校验（`POST /auth/bind`，用户在 PWA 设置页输码）：
+- [x] **T7.2** 实现验证码校验（`POST /auth/bind`，用户在 PWA 设置页输码）：
   - 校验 `bind_code:{email}` 匹配且未过期、`telegram_id` 一致
   - 调 `bindTelegramToUser`：情形 A 直接挂载；情形 B **账号合并**（迁数据、旧号失活，design §3.2）
   - 校验失败/邮箱已被他人绑定 → 可读错误

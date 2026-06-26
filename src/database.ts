@@ -36,6 +36,23 @@ export async function updateUserLastLogin(db: D1Database, id: number, when: stri
   await db.prepare('UPDATE users SET last_login = ? WHERE id = ?').bind(when, id).run();
 }
 
+// 开放自助（spec 016 修订：去掉白名单门控）：TG 用户首次发消息即自动建号，返回其 user_id。
+// email 留空（邮箱是另一条注册入口）；之后可经 /bind 合并到邮箱账号。
+export async function getOrCreateTelegramUser(
+  db: D1Database, telegramId: string, lang: 'zh' | 'en' = 'zh'
+): Promise<number> {
+  const existing = await getUserByTelegramId(db, telegramId);
+  if (existing) return existing.id;
+  try {
+    return await createUser(db, { telegramId, lang });
+  } catch {
+    // 并发首消息可能同时 INSERT 撞 UNIQUE(telegram_id)，回查取胜出的那行
+    const u = await getUserByTelegramId(db, telegramId);
+    if (u) return u.id;
+    throw new Error('getOrCreateTelegramUser: 建号失败');
+  }
+}
+
 // 绑定 Telegram 到邮箱账号（spec 016 §3.2）。调用方应已校验绑定码。
 //   情形 A：该 telegram_id 尚无独立账号 → 直接挂到邮箱账号。
 //   情形 B（账号合并）：telegram_id 已有独立账号 → 其名下数据迁到邮箱账号、旧号置 'merged' 失活。

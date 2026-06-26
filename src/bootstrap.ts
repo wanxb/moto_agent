@@ -11,6 +11,7 @@ import { DeepSeekLLM } from './infra/deepseek-llm';
 import { FallbackLLM } from './infra/fallback-llm';
 import { RouterLLM } from './router';
 import { runAgentLoop } from './agent';
+import { getOrCreateTelegramUser } from './database';
 import { registry } from './tools';
 import { SearchKnowledgeTool } from './tools/knowledge-tools';
 import { runPipeline, type AgentRunner } from './gateway/pipeline';
@@ -58,8 +59,15 @@ export function bootstrap(env: Env): App {
     allowedChatId: env.ALLOWED_CHAT_ID || undefined,
   };
 
+  // 开放自助（spec 016 修订）：渠道用户（TG chat_id）→ DB user_id，首次自动建号。
+  // 空标识（未配 ALLOWED_CHAT_ID 的 REST 等）返回 undefined，沿用单用户不过滤行为。
+  const resolveUserId = (channelUser: string, lang: Lang) =>
+    channelUser
+      ? getOrCreateTelegramUser(env.DB, channelUser, lang === 'en' ? 'en' : 'zh')
+      : Promise.resolve<number | undefined>(undefined);
+
   const run = (adapter: ChannelAdapter, raw: unknown) =>
-    runPipeline(adapter, raw, { ...base, agent });
+    runPipeline(adapter, raw, { ...base, agent, resolveUserId });
 
   return { ...base, agent, run };
 }

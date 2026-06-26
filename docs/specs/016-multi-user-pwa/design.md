@@ -101,7 +101,7 @@ CREATE INDEX IF NOT EXISTS idx_vehicles_user  ON vehicles(user_id);
 
 | 变量 | 变更 | 说明 |
 |------|------|------|
-| `ALLOWED_CHAT_ID` | 保留，但语义变为"管理员 chat_id" | 用于迁移存量数据 + 管理员入口 |
+| `ALLOWED_CHAT_ID` | 保留，但**不再做访问门控**；语义变为"管理员 chat_id" | 仅用于迁移存量数据归属 + 旧 Dashboard `?token=`。Bot 已开放自助，任何 TG 用户可用 |
 | `DASHBOARD_URL` | 保留 | PWA 和 Bot 同域名，也是 Magic Link 域名 |
 | 新增 `RESEND_API_KEY` | 新增 **secret**（`wrangler secret put`） | Resend API key，绝不进 git |
 | 新增 `SENDER_EMAIL` | 新增环境变量 | 发件地址，须属于在 Resend 验证过的域名（如 `noreply@<domain>`） |
@@ -203,8 +203,8 @@ User                   Telegram Bot           Worker              PWA Session   
 
 1. **邮箱账号必须先存在**：`/bind <email>` 时若 `users` 无 `email=<email>` 行，回复"请先在 PWA 用该邮箱登录注册后再绑定"，不发码。避免 `UPDATE ... WHERE email=` 影响 0 行的静默失败。
 2. **目标邮箱已被别的 TG 绑定**：`E.telegram_id` 非空且 ≠ `T` → 拒绝，"该邮箱已绑定其他 Telegram"。
-3. **情形 A（常见）**：`T` 在 `users` 中无独立行（受控准入下通常只有管理员预先存在）→ 直接 `UPDATE users SET telegram_id=T WHERE email=E`。
-4. **情形 B（账号合并）**：`T` 已有自己的 `users` 行 `U_t` 且名下有数据 →
+3. **情形 A（较少）**：`T` 在 `users` 中无独立行 → 直接 `UPDATE users SET telegram_id=T WHERE email=E`。（开放自助下 TG 用户首次发消息已自动建号，故此情形仅见于"从未在 TG 发过消息、直接来 PWA 绑定"。）
+4. **情形 B（开放自助下的常见路径，账号合并）**：`T` 已有自己的 TG-only `users` 行 `U_t`（首次发消息时自动创建）且名下可能有数据 →
    - 先 `UPDATE users SET telegram_id=NULL WHERE id=U_t.id`（腾出 `telegram_id` 唯一约束）；
    - 把 `U_t` 名下数据改挂到 `E`：`UPDATE {vehicles,fuel_records,mileage_records,maintenance_records,reminders} SET user_id=E.id WHERE user_id=U_t.id`；
    - `UPDATE users SET status='merged' WHERE id=U_t.id`（失活，不物理删，可回溯）；
@@ -576,10 +576,10 @@ UPDATE reminders SET user_id = :adminId WHERE user_id IS NULL;
 | 旧 Telegram 用户 | 数据自动归属管理员账户，零感知 |
 | 旧 Dashboard token | token 参数继续有效（管理员访问），PWA 用户使用 session cookie |
 | `/api/v1/*` 端点 | 适配 session 鉴权，旧 token 兼容 30 天过渡期 |
-| 旧 `ALLOWED_CHAT_ID` | 保留为管理员标识，Bot 白名单仍用它 |
-| 陌生人从 Telegram 首次使用 | **不自动建号**（受控准入）：非管理员且未绑定的 chat → 提示"请先在 PWA 用邮箱注册并 /bind 绑定"。避免未鉴权的 LLM 成本敞口 |
-| 新用户从 PWA 首次使用 | 创建 `users` 记录（email 主键，telegram_id 暂空）——邮箱是唯一开放注册入口 |
-| 已绑定用户从 Telegram 使用 | `chat_id` → `getUserByTelegramId` → 正常服务，数据按 `user_id` 隔离 |
+| 旧 `ALLOWED_CHAT_ID` | 保留为管理员标识，**不再做访问门控** |
+| 陌生人从 Telegram 首次使用 | **开放自助**：`chat_id` → `getOrCreateTelegramUser` 自动建一个 TG-only 账号（`telegram_id`，email 空）并提供服务，数据按 `user_id` 隔离。成本由每用户限流兜底（无总量配额，见安全章风险）|
+| 新用户从 PWA 首次使用 | 创建 `users` 记录（email 主键，telegram_id 暂空）——邮箱是另一条注册入口 |
+| 已有账号用户从 Telegram 使用 | `chat_id` → `getUserByTelegramId` 命中既有账号 → 正常服务，数据按 `user_id` 隔离 |
 
 ---
 
@@ -626,7 +626,7 @@ System prompt 新增一段说明（中英文版）：
 | 发信端点被当成邮件轰炸/反射器 | `/auth/send-link`、`/bind` 按 `email+IP` 限流（如 5 次/15min）；匿名也限 |
 | Session token 被窃取 | `HttpOnly; Secure; SameSite=Lax` cookie，JS 读不到、仅 HTTPS、防 CSRF；token 随机不含用户信息，过期即废 |
 | KV 最终一致性可能导致短时 session 不一致 | Session token 在 KV 写入后秒级可见，可接受；Magic Link 要求 token 存在才有效 |
-| 多用户后 LLM 成本上升 | TG 受控准入（不开放自注册）+ 每用户限流（已有）；后续可加用量配额 |
+| 多用户后 LLM 成本上升 | **已改为开放自助**（任何 TG 用户自动建号、可用）：当前仅靠每用户限流兜底，**无总量/人均配额**——成本对公众敞口。后续需加：全局日配额、新用户冷却、可疑用量告警，必要时回退到准入名单 |
 | database.ts 带 user_id 影响范围大 | **一次性全量收口**（安全边界不做渐进）：所有读路径强制 `userId`，缺失即测试失败，杜绝漏过滤泄露 |
 | cron 多用户后推错人 | `reminders.chat_id` 保留为推送目标、新增 `user_id` 仅作归属；cron 按 chat_id 推、按用户 lang 取文案（§16） |
 

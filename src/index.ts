@@ -7,11 +7,22 @@ import { transcribe } from './stt';
 import { bootstrap } from './bootstrap';
 import { TelegramAdapter } from './gateway/adapters/telegram';
 import { RestAdapter } from './gateway/adapters/rest';
-import { MAX_VOICE_SECONDS } from './config';
+import { MAX_VOICE_SECONDS, BIND_CODE_TTL } from './config';
 import { handleApiRequest } from './routes/api';
 import { handleAuthRequest } from './routes/auth-handler';
 import { handleChatRequest } from './routes/chat-api';
 import { dashboardPage } from './routes/dashboard-html';
+import { checkRateLimit, RULES } from './gateway/rate-limiter';
+import { sendBindCodeEmail } from './services/mail';
+import { getUserByEmail } from './database';
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+/** 加密随机 6 位绑定码（前导零补齐）。 */
+function sixDigitCode(): string {
+  const n = crypto.getRandomValues(new Uint32Array(1))[0] % 1000000;
+  return n.toString().padStart(6, '0');
+}
 
 function makeWelcome(lang: Lang): string {
   return t('welcome.title', lang) + t('welcome.body', lang);
@@ -30,17 +41,9 @@ async function resolveLang(env: Env, chatId: string, languageCode?: string): Pro
 function createBot(env: Env): Bot {
   const bot = new Bot(env.TELEGRAM_BOT_TOKEN);
 
-  // Access control middleware
-  bot.use(async (ctx, next) => {
-    const chatId = ctx.chat?.id?.toString();
-    if (env.ALLOWED_CHAT_ID && chatId !== env.ALLOWED_CHAT_ID) {
-      const langCode = ctx.from?.language_code;
-      const lang: Lang = langCode?.startsWith('zh') ? 'zh' : 'en';
-      await ctx.reply(t('general.authorized_only', lang));
-      return;
-    }
-    await next();
-  });
+  // 开放自助（spec 016 修订）：去掉 ALLOWED_CHAT_ID 白名单门控，任何 TG 用户均可使用。
+  // 用户首次发消息时由管道 resolveUserId 自动建号，数据按 user_id 隔离；成本由每用户限流兜底。
+  // 端点本身仍受 webhook secret 保护。
 
   bot.command('start', async ctx => {
     const lang = await resolveLang(env, ctx.chat!.id.toString(), ctx.from?.language_code);
@@ -91,6 +94,43 @@ function createBot(env: Env): Bot {
     const langParam = lang === 'en' ? '?lang=en' : '';
     const link = url.includes('?') ? `${url}&lang=${lang}` : `${url}${langParam}`;
     return ctx.reply(t('dashboard.link', lang, link), { parse_mode: 'HTML' });
+  });
+
+  // spec 016: 把当前 Telegram 账号绑定到 PWA 邮箱账号（发验证码到邮箱，PWA 设置页输码完成）。
+  bot.command('bind', async ctx => {
+    const chatId = ctx.chat.id.toString();
+    const lang = await resolveLang(env, chatId, ctx.from?.language_code);
+    const email = ctx.message?.text?.split(/\s+/)[1]?.trim().toLowerCase() ?? '';
+    if (!EMAIL_RE.test(email)) {
+      await ctx.reply(t('bind.usage', lang));
+      return;
+    }
+    // 无 IP，用 chatId 做限流键，防验证码邮件轰炸
+    const rl = await checkRateLimit(env.SESSION_KV, `auth:bind:${email}:${chatId}`, RULES['auth:send']);
+    if (!rl.allowed) {
+      await ctx.reply(t('bind.rate_limited', lang));
+      return;
+    }
+    // 前置：邮箱账号必须已在 PWA 注册（避免 UPDATE ... WHERE email= 影响 0 行的静默失败）
+    const user = await getUserByEmail(env.DB, email);
+    if (!user) {
+      await ctx.reply(t('bind.email_not_found', lang));
+      return;
+    }
+    const code = sixDigitCode();
+    await env.SESSION_KV.put(
+      `bind_code:${email}`,
+      JSON.stringify({ code, telegram_id: chatId }),
+      { expirationTtl: BIND_CODE_TTL },
+    );
+    try {
+      await sendBindCodeEmail(env, email, code);
+    } catch (e) {
+      console.error('[bind] mail error:', e instanceof Error ? e.message : String(e));
+      await ctx.reply(t('bind.mail_failed', lang));
+      return;
+    }
+    await ctx.reply(t('bind.code_sent', lang, email));
   });
 
   bot.on('message:text', async ctx => {

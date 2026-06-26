@@ -18,6 +18,9 @@ export interface PipelineContext {
   session: ISessionStore;
   kv: KVNamespace;             // 限流复用 SESSION_KV
   rateLimitRule?: RateLimitRule; // 默认用 RULES['chat:per-user']
+  // 渠道用户标识（如 TG chat_id）→ DB users.id。提供时数据按 user_id 隔离；
+  // 不提供（如旧单用户路径）则传 undefined，沿用不过滤行为。
+  resolveUserId?: (channelUser: string, lang: Lang) => Promise<number | undefined>;
 }
 
 /** 执行一条渠道消息（语言检测/限流/Session/Agent/持久化/回复全包）。返回 agent 的最终回复文本 */
@@ -59,11 +62,12 @@ export async function runPipeline(
       lang = await adapter.detectLanguage();
     }
 
-    // 5. 会话 + Agent
+    // 5. 会话 + Agent（解析当前用户 → 注入 user_id 实现数据隔离）
+    const dbUserId = ctx.resolveUserId ? await ctx.resolveUserId(userId, lang) : undefined;
     const history = await ctx.session.get(userId);
     history.push({ role: 'user', content: text });
 
-    reply = await ctx.agent(history, ctx.db, lang);
+    reply = await ctx.agent(history, ctx.db, lang, dbUserId);
     const clean = toPlainText(reply);
 
     // 6. 持久化会话
