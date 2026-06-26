@@ -12,6 +12,7 @@ export interface Env {
   KNOWLEDGE_INDEX: VectorizeIndex;  // spec 015 知识库 RAG
   RESEND_API_KEY?: string;  // spec 016 发信（Resend），经 wrangler secret put 注入
   SENDER_EMAIL?: string;    // spec 016 发件地址，须属于 Resend 已验证域名
+  ASSETS?: Fetcher;         // spec 016 静态资源绑定（web/ SPA，ADR-0010）；测试环境未绑定
 }
 
 // OpenAI-compatible message format (used internally and for DeepSeek)

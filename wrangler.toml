@@ -26,6 +26,14 @@ index_name = "knowledge_index"
 [ai]
 binding = "AI"
 
+# 静态资源 / PWA 前端（spec 016 / ADR-0010）：web/ 的 Vite 构建产物。
+# 部署前需先 `npm --prefix web run build` 产出 web/dist（已 gitignore）。
+# Worker 优先处理动态路由（/api、/auth、webhook），其余 GET 经 env.ASSETS 回退到 SPA。
+[assets]
+directory = "./web/dist"
+binding = "ASSETS"
+not_found_handling = "single-page-application"
+
 # Secrets are set via: wrangler secret put SECRET_NAME
 # Required secrets:
 #   TELEGRAM_BOT_TOKEN

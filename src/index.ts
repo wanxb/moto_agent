@@ -185,6 +185,13 @@ export default {
         return handleAuthRequest(request, env);
       }
 
+      // ── 静态资源 / SPA（spec 016 / ADR-0010）──────────────────────────────
+      // 动态路由（上面）已先行处理；其余 GET 交给 [assets]（SPA fallback 到 index.html）。
+      // 测试环境无 ASSETS 绑定（wrangler.test.toml 未配），跳过以保留原行为。
+      if (env.ASSETS && request.method === 'GET') {
+        return env.ASSETS.fetch(request);
+      }
+
       // ── Telegram webhook ──────────────────────────────────────────────────
       if (env.TELEGRAM_WEBHOOK_SECRET) {
         const token = request.headers.get('X-Telegram-Bot-Api-Secret-Token');
