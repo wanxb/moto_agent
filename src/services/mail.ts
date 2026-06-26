@@ -1,0 +1,49 @@
+// 发信服务（spec 016）— Resend 免费层。
+// MailChannels 对 Cloudflare Workers 的免费发信已于 2024-08-31 终止（见 ADR-0010），改用 Resend。
+// 需 env.RESEND_API_KEY（secret）+ env.SENDER_EMAIL（属于 Resend 已验证域名）。
+
+import type { Env } from '../types';
+
+/** 调 Resend 发一封纯文本邮件。失败抛出人类可读错误，由调用方转成用户提示。 */
+export async function sendEmail(env: Env, to: string, subject: string, text: string): Promise<void> {
+  if (!env.RESEND_API_KEY || !env.SENDER_EMAIL) {
+    console.error('[mail] 缺少 RESEND_API_KEY / SENDER_EMAIL 配置');
+    throw new Error('邮件服务未配置');
+  }
+
+  const resp = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: {
+      'authorization': `Bearer ${env.RESEND_API_KEY}`,
+      'content-type': 'application/json',
+    },
+    body: JSON.stringify({
+      from: `Moto Bot <${env.SENDER_EMAIL}>`,
+      to: [to],
+      subject,
+      text,
+    }),
+  });
+
+  if (!resp.ok) {
+    const detail = await resp.text().catch(() => '');
+    console.error('[mail] resend send failed:', resp.status, detail);
+    throw new Error('邮件发送失败');
+  }
+}
+
+/** 发登录魔法链接邮件（15 分钟有效）。 */
+export async function sendMagicLinkEmail(env: Env, email: string, link: string): Promise<void> {
+  await sendEmail(
+    env, email, '🔑 Moto Bot 登录链接',
+    `点击以下链接登录 Moto Bot（15 分钟内有效）：\n\n${link}\n\n如果非本人操作，请忽略此邮件。`,
+  );
+}
+
+/** 发 Telegram 绑定验证码邮件（10 分钟有效）。 */
+export async function sendBindCodeEmail(env: Env, email: string, code: string): Promise<void> {
+  await sendEmail(
+    env, email, '🔗 Moto Bot 绑定验证码',
+    `你的绑定验证码是 ${code}（10 分钟内有效）。\n请在 PWA 设置页输入完成 Telegram 绑定。\n\n如果非本人操作，请忽略此邮件。`,
+  );
+}

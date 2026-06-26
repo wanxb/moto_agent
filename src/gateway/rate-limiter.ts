@@ -18,6 +18,8 @@ export const RULES: Record<string, RateLimitRule> = {
   'chat:per-user':   { windowSeconds: 60, maxRequests: RATE_LIMIT_PER_USER },
   'chat:global':     { windowSeconds: 60, maxRequests: RATE_LIMIT_GLOBAL },
   'auth:per-ip':     { windowSeconds: 300, maxRequests: RATE_LIMIT_AUTH },
+  // 发信端点（send-link / bind）按 email+IP 限流，防邮件轰炸/反射（spec 016）
+  'auth:send':       { windowSeconds: 900, maxRequests: RATE_LIMIT_AUTH },
 };
 
 interface Counter { count: number; resetAt: number }

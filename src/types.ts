@@ -8,8 +8,10 @@ export interface Env {
   DEEPSEEK_API_KEY: string;
   ANTHROPIC_API_KEY: string;
   ALLOWED_CHAT_ID: string;
-  DASHBOARD_URL?: string;   // Dashboard 链接，bot /dashboard 命令使用
+  DASHBOARD_URL?: string;   // Dashboard / PWA 域名；也是 Magic Link 链接域名
   KNOWLEDGE_INDEX: VectorizeIndex;  // spec 015 知识库 RAG
+  RESEND_API_KEY?: string;  // spec 016 发信（Resend），经 wrangler secret put 注入
+  SENDER_EMAIL?: string;    // spec 016 发件地址，须属于 Resend 已验证域名
 }
 
 // OpenAI-compatible message format (used internally and for DeepSeek)
