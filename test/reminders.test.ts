@@ -278,17 +278,21 @@ describe('runScheduled multi-user (T10B)', () => {
     expect(sent[0].text).toContain('due:');
   });
 
-  it('纯 PWA 属主（未绑 TG、无 chat_id）→ 跳过，不误推给管理员', async () => {
+  it('纯 PWA 属主（未绑 TG、无 chat_id）→ 推入对话历史，不推 TG', async () => {
     const owner = await createUser(env.DB, { email: 'pwa@x.com' });   // 无 telegram_id
     await insertReminder(env.DB, { type: '保险', mode: 'date', trigger_date: '2026-01-01', user_id: owner });
 
-    const sent: string[] = [];
+    const tgSent: string[] = [];
     const e = makeEnv(env.DB, env.SESSION_KV);                        // ALLOWED_CHAT_ID=999999
-    const r = await runScheduled(e, { today: '2026-06-10', send: async (chatId) => { sent.push(chatId); } });
+    const r = await runScheduled(e, { today: '2026-06-10', send: async (chatId) => { tgSent.push(chatId); } });
 
-    expect(r.fired).toBe(0);
-    expect(sent).toHaveLength(0);                        // 没推给 999999
-    expect(await getActiveReminders(env.DB)).toHaveLength(1);   // 仍 active
+    expect(r.fired).toBe(1);                                          // PWA 通道生效
+    expect(tgSent).toHaveLength(0);                                   // 没走 TG 推给 999999
+    // PWA 对话历史里收到了提醒
+    const hist = await env.SESSION_KV.get(`session:pwa:${owner}`);
+    expect(hist).not.toBeNull();
+    expect(JSON.parse(hist!)[0].content).toContain('保险');
+    expect((await getActiveReminders(env.DB))[0].remind_count).toBe(1);
   });
 
   it('chat_id 优先于属主 telegram_id', async () => {

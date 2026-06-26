@@ -2,9 +2,8 @@ import { Bot } from 'grammy';
 import { Env, ReminderWithVehicle } from './types';
 import type { Lang } from './i18n/types';
 import { t } from './i18n';
-import {
-  getActiveReminders, getLatestOdometer, markReminderDone, incrementRemindCount, getUserById,
-} from './database';
+import { getActiveReminders, getLatestOdometer, markReminderDone, incrementRemindCount, getUserById } from './database';
+import { pushPwaNotice } from './routes/chat-api';
 
 export interface DueReminder extends ReminderWithVehicle {
   current_odometer?: number;   // mileage 模式：判定时的当前里程
@@ -60,17 +59,33 @@ export async function runScheduled(
     const owner = r.user_id != null ? await getUserById(env.DB, r.user_id) : null;
     const lang: Lang = owner?.lang === 'en' ? 'en' : 'zh';
     // 推送目标：reminders.chat_id → 属主 users.telegram_id → （仅无属主的历史提醒）ALLOWED_CHAT_ID。
-    // 关键：有属主的提醒绝不回退到 ALLOWED_CHAT_ID，否则会把别人的提醒推给管理员。
-    // 纯 PWA 属主（有 user_id 但未绑 TG、且无 chat_id）→ 无目标，跳过（Phase 4 再加站内/邮件提醒）。
-    const target = r.chat_id
+    const tgTarget = r.chat_id
       ?? owner?.telegram_id
       ?? (r.user_id == null ? env.ALLOWED_CHAT_ID : undefined);
-    if (!target) {
-      console.log(`[cron] reminder ${r.id} 无推送目标（纯 PWA 未绑 TG），跳过`);
+
+    // 无 TG 目标但有属主 → 把提醒推进 PWA 对话历史，用户下次打开 /chat 即见。
+    if (!tgTarget && r.user_id != null) {
+      try {
+        const text = formatReminder(r, null, lang, r.remind_count + 1);
+        await pushPwaNotice(env, r.user_id, text);
+        await incrementRemindCount(env.DB, r.id);
+        if (r.remind_count + 1 >= 3) {
+          await markReminderDone(env.DB, r.id, today);
+        }
+        fired++;
+        console.log(`[cron] reminder ${r.id} PWA 对话内通知（user=${r.user_id}）`);
+      } catch (e) {
+        console.error(`[cron] PWA push failed for reminder ${r.id}:`, e instanceof Error ? e.message : String(e));
+      }
+      continue;
+    }
+
+    if (!tgTarget) {
+      console.log(`[cron] reminder ${r.id} 无推送目标，跳过`);
       continue;
     }
     try {
-      await send(target, formatReminder(r, null, lang, r.remind_count + 1));
+      await send(tgTarget, formatReminder(r, null, lang, r.remind_count + 1));
       // 推送成功后：计数+1；满 3 次则标记完成（不再推送），否则保持活跃供下次 cron 再提醒。
       // 续期不再在此触发——只在用户记录保养时（log_maintenance → renewReminderAfterMaintenance）自动创建下一个提醒。
       await incrementRemindCount(env.DB, r.id);
