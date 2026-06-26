@@ -59,6 +59,11 @@ export async function destroySession(kv: KVNamespace, token: string): Promise<vo
   if (token) await kv.delete(SESSION_PREFIX + token);
 }
 
+/** 便捷：从 Request 的 Cookie 解析 token 并校验 session（含滑动续期）。无效返回 null。 */
+export async function resolveSessionFromRequest(request: Request, kv: KVNamespace): Promise<SessionData | null> {
+  return getSession(kv, parseSessionToken(request.headers.get('Cookie')) ?? '');
+}
+
 /** 从 Cookie header 提取 session token。 */
 export function parseSessionToken(cookieHeader: string | null): string | null {
   if (!cookieHeader) return null;

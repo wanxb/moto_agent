@@ -2,7 +2,8 @@
 // 数据来源：现有 database.ts 函数，加少量直查 SQL。
 
 import { getFuelRecordsByDateRange, getMaintenanceRecords } from '../database';
-import { getActiveReminders } from '../database';
+import { getActiveReminders, getUserById } from '../database';
+import { resolveSessionFromRequest } from '../services/session';
 import type { FuelRecord, MaintenanceRecord } from '../types';
 
 // ── Token 鉴权 ───────────────────────────────────────────────────────────────
@@ -20,16 +21,25 @@ function tokenAuth(request: Request, env: { ALLOWED_CHAT_ID?: string }): Respons
 
 // ── 入口 ──────────────────────────────────────────────────────────────────────
 
-export async function handleApiRequest(request: Request, env: { DB: D1Database; ALLOWED_CHAT_ID?: string }): Promise<Response> {
+export async function handleApiRequest(request: Request, env: { DB: D1Database; ALLOWED_CHAT_ID?: string; SESSION_KV: KVNamespace }): Promise<Response> {
   if (request.method === 'OPTIONS') {
     return new Response(null, { status: 204, headers: { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET, OPTIONS', 'Access-Control-Allow-Headers': 'Authorization, Content-Type' } });
   }
 
-  const authErr = tokenAuth(request, env);
-  if (authErr) return authErr;
-
   const url = new URL(request.url);
   const json = (data: unknown) => new Response(JSON.stringify(data), { status: 200, headers: CORS_HEADERS });
+
+  // /api/v1/me：当前登录用户（session cookie 鉴权，不走 ?token=）。前端用它判登录态。
+  if (url.pathname === '/api/v1/me') {
+    const session = await resolveSessionFromRequest(request, env.SESSION_KV);
+    if (!session) return new Response(JSON.stringify({ error: 'unauthorized' }), { status: 401, headers: CORS_HEADERS });
+    const user = await getUserById(env.DB, session.user_id);
+    if (!user) return new Response(JSON.stringify({ error: 'unauthorized' }), { status: 401, headers: CORS_HEADERS });
+    return json({ user: { id: user.id, email: user.email, telegram_id: user.telegram_id, nickname: user.nickname, lang: user.lang, is_admin: user.is_admin } });
+  }
+
+  const authErr = tokenAuth(request, env);
+  if (authErr) return authErr;
 
   switch (url.pathname) {
     case '/api/v1/stats':        return json(await fuelStats(env.DB, url));

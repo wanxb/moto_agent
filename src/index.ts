@@ -9,6 +9,7 @@ import { TelegramAdapter } from './gateway/adapters/telegram';
 import { RestAdapter } from './gateway/adapters/rest';
 import { MAX_VOICE_SECONDS } from './config';
 import { handleApiRequest } from './routes/api';
+import { handleAuthRequest } from './routes/auth-handler';
 import { dashboardPage } from './routes/dashboard-html';
 
 function makeWelcome(lang: Lang): string {
@@ -177,6 +178,11 @@ export default {
       // ── Dashboard API (read-only, token auth) ─────────────────────────────
       if (url.pathname.startsWith('/api/v1/') && request.method === 'GET') {
         return handleApiRequest(request, env);
+      }
+
+      // ── 认证路由（spec 016：Magic Link / 登出 / 绑定）─────────────────────
+      if (url.pathname.startsWith('/auth/')) {
+        return handleAuthRequest(request, env);
       }
 
       // ── Telegram webhook ──────────────────────────────────────────────────

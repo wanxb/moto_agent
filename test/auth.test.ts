@@ -1,13 +1,13 @@
 import { describe, it, expect, beforeAll, beforeEach, afterEach, vi } from 'vitest';
 import { env } from 'cloudflare:test';
+import worker from '../src/index';
 import { handleAuthRequest } from '../src/routes/auth-handler';
-import { getSession, parseSessionToken } from '../src/services/session';
+import { getSession, createSession, parseSessionToken } from '../src/services/session';
 import { getUserByEmail, getUserByTelegramId, createUser } from '../src/database';
+import type { Env } from '../src/types';
 import { initDB, clearDB } from './utils';
 
-const E = { ...env, RESEND_API_KEY: 're_test', SENDER_EMAIL: 'no-reply@test.dev', DASHBOARD_URL: 'https://test.dev' } as unknown as typeof env & {
-  RESEND_API_KEY: string; SENDER_EMAIL: string; DASHBOARD_URL: string;
-};
+const E = { ...env, RESEND_API_KEY: 're_test', SENDER_EMAIL: 'no-reply@test.dev', DASHBOARD_URL: 'https://test.dev' } as unknown as Env;
 
 let fetchSpy: ReturnType<typeof vi.spyOn>;
 
@@ -173,5 +173,33 @@ describe('POST /auth/bind', () => {
     await createUser(env.DB, { email: 'i@x.com' });
     const res = await handleAuthRequest(jsonReq('POST', '/auth/bind', { email: 'i@x.com', code: '123456' }), E);
     expect(res.status).toBe(400);
+  });
+});
+
+// ── worker 路由接入（T4-A）──────────────────────────────────────────────────────
+
+describe('worker routing (index.ts)', () => {
+  it('routes /auth/* to the auth handler', async () => {
+    const res = await worker.fetch!(jsonReq('POST', '/auth/send-link', { email: 'w@x.com' }), E);
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true });
+  });
+
+  it('/api/v1/me → 401 without session, user with session', async () => {
+    const noSession = await worker.fetch!(new Request('https://test.dev/api/v1/me'), E);
+    expect(noSession.status).toBe(401);
+
+    const id = await createUser(env.DB, { email: 'me@x.com', nickname: 'Me' });
+    const token = await createSession(env.SESSION_KV, { user_id: id, email: 'me@x.com' });
+    const withSession = await worker.fetch!(
+      new Request('https://test.dev/api/v1/me', { headers: { Cookie: `session_token=${token}` } }), E,
+    );
+    expect(withSession.status).toBe(200);
+    expect((await withSession.json() as { user: { email: string } }).user.email).toBe('me@x.com');
+  });
+
+  it('legacy dashboard ?token= still works', async () => {
+    const res = await worker.fetch!(new Request(`https://test.dev/api/v1/vehicles?token=${E.ALLOWED_CHAT_ID}`), E);
+    expect(res.status).toBe(200);
   });
 });
