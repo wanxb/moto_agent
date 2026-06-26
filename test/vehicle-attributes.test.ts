@@ -17,7 +17,7 @@ beforeAll(async () => {
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     date TEXT NOT NULL, odometer REAL NOT NULL, liters REAL NOT NULL,
     price_total REAL NOT NULL, fuel_type TEXT NOT NULL DEFAULT '95',
-    note TEXT, vehicle_id INTEGER, deleted_at TEXT,
+    note TEXT, vehicle_id INTEGER, deleted_at TEXT, user_id INTEGER,
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
   )`).run();
 });
