@@ -131,10 +131,10 @@
 
 ### T9 PWA manifest + 安装支持
 
-- [ ] **T9.1** `web/public/manifest.json`（静态文件，Vite 原样产出，见 design §4.4）
-- [ ] **T9.2** SPA `index.html` `<head>` 加 `<link rel="manifest">` + `<meta name="theme-color" content="#f59e0b">` + SVG emoji favicon
-- [ ] **T9.3** 生成真实 PNG 图标 `web/public/icon-192.png` / `icon-512.png`（`purpose: any maskable`，避免 SVG/MIME 安装坑）
-  - 验证：手机 Chrome 打开 → "添加到主屏幕" → 安装后全屏打开、显示图标
+- [x] **T9.1** `web/public/manifest.json`（静态文件，Vite 原样产出，见 design §4.4）
+- [x] **T9.2** SPA `index.html` `<head>` 加 `<link rel="manifest">` + `<meta name="theme-color" content="#f59e0b">` + SVG emoji favicon
+- [x] **T9.3** 生成真实 PNG 图标 `web/public/icon-192.png` / `icon-512.png`（`purpose: any maskable`）：脚本 `scripts/make-icons.mjs`（sharp 渲染几何 SVG，无字体依赖）
+  - 验证：手机 Chrome 打开 → "添加到主屏幕" → 安装后全屏打开、显示图标（需真机点验）
 
 ### T10 仪表盘适配（API 鉴权 + 迁移边界）
 
