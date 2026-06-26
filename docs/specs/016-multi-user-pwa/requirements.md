@@ -9,7 +9,7 @@
 
 当前系统是**单用户**的：`ALLOWED_CHAT_ID` 白名单控制，只有一个人能用。但 [Persona B](../../product/personas.md#persona-b省心骑手非技术用户phase-3-目标) 可能不用 Telegram，或者不想学 Bot 指令，更习惯在手机浏览器里点开一个页面直接说话或打字记录加油。
 
-需要一套**零成本的多用户认证系统** + **PWA 前端**，让新用户不用 Telegram 也能使用，同时让已有 Telegram 用户能绑定邮箱，两端数据打通。
+需要一套**低成本的多用户认证系统** + **PWA 前端**，让新用户不用 Telegram 也能使用，同时让已有 Telegram 用户能绑定邮箱，两端数据打通。发信走 **Resend 免费层**（100 封/天，Cloudflare 官方推荐的 Workers 发信方案；MailChannels 免费服务已于 2024-08-31 终止，不再可用）。
 
 ---
 
@@ -30,20 +30,25 @@
 ## 3. 范围
 
 **In Scope（本期实现）**
-- 邮箱 Magic Link 认证（MailChannels 免费发信）
-- Session 管理（基于 KV，最长 30 天）
+- 邮箱 Magic Link 认证（Resend 免费层发信，需 `RESEND_API_KEY` + 验证域名）
+- 发信端点防滥用：`/auth/send-link`、`/bind` 按 `email + IP` 限流，防邮件轰炸/反射
+- Magic Link 防邮件安全扫描器预取（落地页需用户主动确认才消费一次性 token）
+- Session 管理（基于 KV，最长 30 天；`HttpOnly; Secure; SameSite=Lax` Cookie；滑动续期）
 - PWA 核心页面：对话聊天界面（复刻 Telegram 气泡样式）
 - PWA 页面：登录页、设置页（语言切换、登出）
 - 语音输入（Web MediaRecorder → 已有 Whisper STT）
-- Telegram 命令 `/bind` 绑定邮箱
+- Telegram 命令 `/bind` 绑定邮箱（验证码方式）
 - 用户数据模型（`users` 表）及存量数据迁移
-- 数据隔离：所有查询按 `user_id` 过滤
+- 数据隔离：`vehicles` 及三张记录表（`fuel_records`/`mileage_records`/`maintenance_records`）与 `reminders` 均直接持有 `user_id`，**所有读路径按 `user_id` 过滤、默认拒绝**
+- TG 绑定时的**账号合并**：把 TG 侧已有数据并入邮箱账号
+- cron 到期提醒多用户化：按各用户 `telegram_id` + `lang` 推送
 - 现有仪表盘复用（路径 `/dashboard`，加用户过滤）
 - PWA manifest 安装支持
 
 **Out of Scope（本期不做）**
-- 密码登录（邮箱验证码足够，不存密码）
+- 密码登录（邮箱魔法链接足够，不存密码）
 - OAuth/Google/Apple 登录（可后续加，ADR 扩展）
+- **TG-only 开放自注册**：陌生人给 Bot 发消息不会自动建号（避免未鉴权的 LLM 成本敞口）；邮箱才是开放注册入口，TG 侧仅服务管理员与已绑定用户
 - 服务端推送通知（Phase 4）
 - 离线使用 / Service Worker 缓存策略（Phase 4）
 - 多用户管理后台（邀请/封禁/配额）
@@ -59,11 +64,14 @@
 - **AC3（链接过期）** Given 用户申请登录后超过 15 分钟，When 点击邮件中的链接，Then 提示链接已过期，引导重新申请。
 - **AC4（对话交互）** Given 用户已登录，When 在输入框打字"加了 5 升 95 号花了 50"并发送，Then 页面显示对话气泡，Bot 回复油耗数据，数据写入 D1 并与 Telegram 端同用户数据打通。
 - **AC5（语音输入）** Given 用户已登录且浏览器支持 MediaRecorder，When 点击话筒按钮说话，Then 录音转文字并自动发送，Bot 正常回复。
-- **AC6（Telegram 绑定）** Given 用户已在 Telegram 使用 Bot，When 在 TG 中发 `/bind my@email.com` 并在 PWA 用同一邮箱登录，Then TG 和 PWA 看到同样的车辆和加油记录。
-- **AC7（数据隔离）** Given 用户 A 和用户 B 各自登录，When 访问各自仪表盘/对话，Then 看不到对方的数据。
+- **AC6（Telegram 绑定）** Given 用户已用邮箱在 PWA 注册，When 在 TG 中发 `/bind my@email.com`、收到邮箱里的 6 位验证码并在 PWA 设置页输入，Then 绑定成功，TG 和 PWA 看到同样的车辆和加油记录（若 TG 侧原已有数据，则并入该邮箱账号，见 AC11）。
+- **AC7（数据隔离）** Given 用户 A 和用户 B 各自登录，When 访问各自仪表盘/对话，Then 看不到对方的数据；含 `vehicle_id` 为空的孤儿记录也仅归属其 `user_id`。
 - **AC8（PWA 安装）** Given 用户用手机浏览器打开 PWA，When 浏览器弹出"添加到主屏幕"提示，Then 安装后以全屏方式打开，显示启动屏。
 - **AC9（登出）** Given 用户已登录，When 点击"登出"，Then Session 清除，跳转到登录页。
-- **AC10（存量兼容）** Given 原有单用户已有加油记录，When 部署多用户后首次访问，Then 原有数据归入第一个绑定的管理员账户，不丢失。
+- **AC10（存量兼容）** Given 原有单用户已有加油记录，When 部署多用户后首次访问，Then 原有数据（车辆/记录/提醒）归入 `ALLOWED_CHAT_ID` 对应的管理员账户，不丢失，cron 提醒仍能推送。
+- **AC11（账号合并）** Given TG 侧已有一个独立账号且名下有数据，When 该 TG 用户 `/bind` 到一个已存在的邮箱账号并验证通过，Then TG 侧数据的 `user_id` 全部改挂到邮箱账号、原 TG-only 账号失活，绑定不因 `telegram_id`/`email` 唯一约束失败。
+- **AC12（发信限流）** Given 同一邮箱或 IP 在 15 分钟内多次申请，When 超过阈值（如 5 次），Then 返回"请求过于频繁，请稍后再试"，不再发信。
+- **AC13（链接防预取）** Given 邮件被企业邮箱安全网关自动扫描（GET 链接），When 扫描器抢先访问 `/auth/verify`，Then 一次性 token 不被消费、用户真实点击仍可登录。
 
 ---
 
@@ -132,8 +140,10 @@ Bot: ✅ 已向 alice@example.com 发送验证码。
 - **依赖**：现有 Agent Loop、工具层（复用，不改原有推理链路）
 - **依赖**：现有 SESSION_KV（加存 session token 和 magic link）
 - **依赖**：现有仪表盘（`src/routes/dashboard-html.ts`、`src/routes/api.ts`）需要加 `user_id` 过滤
-- **依赖**：MailChannels 发信需要域名（`DASHBOARD_URL` 的域名）配置 SPF/DKIM 发件策略（一次性 DNS 配置）
-- **假设**：Workers 运行时可以调用 `api.mailchannels.net`（已验证，MailChannels 对 CF Workers 流量免费且无需 API key）
+- **依赖**：现有 `src/scheduled.ts` cron 推送需改造为多用户（按各用户 `telegram_id`/`lang`）
+- **依赖**：Resend 账号 + 在 Resend 验证一个发件域名（配置 SPF/DKIM/DMARC，一次性 DNS）；`RESEND_API_KEY` 经 `wrangler secret put` 注入，`SENDER_EMAIL` 为该域名下的发件地址
+- **假设**：Workers 运行时可调用 `https://api.resend.com/emails`（标准 fetch，无运行时限制）
+- **假设**：Resend 免费层 100 封/天足够当前注册/绑定量；超限再升档或换 provider（ADR 扩展）
 - **假设**：现有单用户数据可以迁移到一个管理员账号（`ALLOWED_CHAT_ID` 对应者）
 
 ---
@@ -142,7 +152,9 @@ Bot: ✅ 已向 alice@example.com 发送验证码。
 
 | 问题 | 影响 | 待决 |
 |------|------|------|
-| MailChannels 是否需要发件域名 DNS 配置才能稳定送达？ | 可能影响邮件到达率 | 实现后先用个人邮箱测试；备选方案：初期用 MailChannels 无配置直接发（可能进垃圾箱） |
+| Resend 免费层 100 封/天是否够长期？ | 超限则注册/绑定受阻 | 当前量级足够；接近上限再升 Resend 付费档或评估其他 provider（写 ADR） |
+| 发件域名用哪个？ | 决定 DNS 配置位置 | 用 `DASHBOARD_URL` 的主域名或其子域（如 `mail.<domain>`），在 Resend 后台验证 |
 | 语音在 Workers 传输体积限制（100MB）是否够？ | 30 秒录音约 500KB，绰绰有余 | 无需特别处理 |
 | 是否支持多设备同时登录同一账号？ | Session 策略决定 | 支持，每个设备独立 session token，共享同一 user_id 数据 |
 | 仪表盘 API 目前用 `ALLOWED_CHAT_ID` 当 token，多用户后怎么兼容？ | API 鉴权需改为 session token | 过渡期两种鉴权并存，逐步废弃旧 token |
+| TG 侧是否开放陌生人自注册？ | 未鉴权的 LLM 成本敞口 | 本期**不开放**：仅管理员 + 已绑定用户可用 TG，邮箱是唯一开放注册入口（见 §3 Out of Scope） |

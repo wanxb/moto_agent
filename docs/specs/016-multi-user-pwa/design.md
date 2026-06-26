@@ -9,23 +9,28 @@
 
 在 Cloudflare Worker 中扩展以下能力：
 
-1. **用户认证系统**：邮箱 Magic Link（MailChannels 免费发信）+ KV session token，**零第三方费用**
-2. **用户数据模型**：新建 `users` 表，存量数据迁移至管理员用户，新数据按 `user_id` 隔离
-3. **PWA 前端**：Worker 内嵌 HTML 对话界面（复用现有仪表盘模式），含气泡聊天 + 快捷操作面板 + 语音输入
+1. **用户认证系统**：邮箱 Magic Link（**Resend 免费层**发信，100 封/天）+ KV session token，**近零第三方费用**（仅需在 Resend 验证发件域名 + `RESEND_API_KEY`）
+2. **用户数据模型**：新建 `users` 表；`vehicles`、三张记录表与 `reminders` 均补 `user_id` 列直接隔离；存量数据迁移至管理员用户
+3. **PWA 前端**：独立 `web/` 子项目（**Vite + Svelte**），构建成静态资源由现有 Worker 经 `[assets]` 绑定托管（[ADR-0010](../../engineering/adr/0010-frontend-svelte-spa-static-assets.md)）；含气泡聊天 + 快捷操作面板 + 语音输入。Worker 退回成纯 API + Bot + auth 端点
 4. **Telegram 绑定**：新增 `/bind` 命令，通过邮箱验证码关联 TG 账号
 
 整体架构：
 
 ```
-┌──────────────────────────────────────────────────────────┐
-│                    Cloudflare Worker                      │
-│                                                           │
-│  ┌──────────┐  ┌──────────┐  ┌───────────────────────┐   │
-│  │ Telegram  │  │  PWA/Web  │  │  Auth Routes          │   │
-│  │ Bot       │  │  Pages    │  │  /auth/*              │   │
-│  └─────┬─────┘  └─────┬────┘  └───────────┬───────────┘   │
-│        │              │                  │                │
-│        ▼              ▼                  ▼                │
+                  ┌──────────────────────────────┐
+   web/ (Svelte)  │  [assets]  web/dist/         │  ← Vite 构建产物，由 Worker 托管
+   Vite 构建 ───► │  SPA shell + /login /chat …  │     (公开返回，壳内无用户数据)
+                  └──────────────┬───────────────┘
+                                 │ fetch(API, cookie)
+┌────────────────────────────────┼─────────────────────────┐
+│                    Cloudflare Worker (动态路由)            │
+│                                 ▼                         │
+│  ┌──────────┐  ┌────────────────┐  ┌──────────────────┐   │
+│  │ Telegram  │  │ Chat/Voice/API │  │  Auth Routes     │   │
+│  │ Bot       │  │ /chat/* /api/* │  │  /auth/*         │   │
+│  └─────┬─────┘  └───────┬────────┘  └────────┬─────────┘   │
+│        │               │                    │             │
+│        ▼               ▼                    ▼             │
 │  ┌────────────────────────────────────────────────────┐   │
 │  │          中间件层 (auth + data isolation)          │   │
 │  │  · Session token 校验                               │   │
@@ -53,9 +58,10 @@
 
 ---
 
-## 2. 数据模型变更
+## 2. 数据模型变更（迁移 0009）
 
-> 遵守"只增不删"（[data-model](../../engineering/data-model.md) §5）。
+> 遵守"只增不删"（[data-model](../../engineering/data-model.md) §5）：只 `CREATE TABLE`/`ADD COLUMN`/`ADD INDEX`，不改既有列语义。
+> 迁移文件 `migrations/0009_multi_user.sql`（`0008` 已被 spec 017 占用）。`ADD COLUMN` 非幂等，重复执行报 `duplicate column` 即已迁移。
 
 ### 新建 users 表
 
@@ -67,23 +73,44 @@ CREATE TABLE IF NOT EXISTS users (
     nickname    TEXT,                            -- 昵称（可选）
     lang        TEXT    NOT NULL DEFAULT 'zh',   -- 语言偏好 'zh' | 'en'
     is_admin    INTEGER NOT NULL DEFAULT 0,      -- 1=管理员（存量数据迁移目标）
+    status      TEXT    NOT NULL DEFAULT 'active', -- 'active' | 'merged'（账号合并后失活）
     created_at  TEXT    NOT NULL DEFAULT (datetime('now')),
     last_login  TEXT                             -- 最近登录时间
 );
 ```
+
+### 既有表补 user_id（直接隔离，不靠 JOIN）
+
+`vehicles` 已有 `user_id` 列（schema 中 "Phase 3 预留"）。本期给三张记录表与 `reminders` **各补一列 `user_id`**，让隔离不依赖 `vehicle_id` 关联——否则 `vehicle_id IS NULL` 的孤儿记录无法归属、会跨用户泄露。
+
+```sql
+ALTER TABLE fuel_records        ADD COLUMN user_id INTEGER;
+ALTER TABLE mileage_records     ADD COLUMN user_id INTEGER;
+ALTER TABLE maintenance_records ADD COLUMN user_id INTEGER;
+ALTER TABLE reminders           ADD COLUMN user_id INTEGER;  -- 归属；chat_id 保持"推送目标"原义不变
+CREATE INDEX IF NOT EXISTS idx_fuel_user      ON fuel_records(user_id);
+CREATE INDEX IF NOT EXISTS idx_mileage_user   ON mileage_records(user_id);
+CREATE INDEX IF NOT EXISTS idx_maint_user     ON maintenance_records(user_id);
+CREATE INDEX IF NOT EXISTS idx_reminders_user ON reminders(user_id);
+CREATE INDEX IF NOT EXISTS idx_vehicles_user  ON vehicles(user_id);
+```
+
+> **关键**：`reminders.chat_id`（TEXT，Telegram 推送目标）**绝不被改写**——cron 直接拿它 `sendMessage`（见 `src/scheduled.ts`）。归属用新列 `user_id`，与推送目标解耦。
 
 ### env var 变更
 
 | 变量 | 变更 | 说明 |
 |------|------|------|
 | `ALLOWED_CHAT_ID` | 保留，但语义变为"管理员 chat_id" | 用于迁移存量数据 + 管理员入口 |
-| `DASHBOARD_URL` | 保留 | PWA 和 Bot 同域名 |
-| 新增 `SENDER_EMAIL` | 新增环境变量 | 发件邮箱地址（如 `noreply@domain.com`） |
+| `DASHBOARD_URL` | 保留 | PWA 和 Bot 同域名，也是 Magic Link 域名 |
+| 新增 `RESEND_API_KEY` | 新增 **secret**（`wrangler secret put`） | Resend API key，绝不进 git |
+| 新增 `SENDER_EMAIL` | 新增环境变量 | 发件地址，须属于在 Resend 验证过的域名（如 `noreply@<domain>`） |
 
 ### 同步点
 
-- `docs/schema.sql` 加入 `users` 表
+- `docs/schema.sql` 加入 `users` 表 + 四张表的 `user_id` 列与索引
 - `test/utils.ts` 建表语句同步
+- `src/types.ts` 增加 `User` 接口；`FuelRecord`/`MileageRecord`/`MaintenanceRecord`/`Reminder` 加 `user_id`
 
 ---
 
@@ -92,7 +119,7 @@ CREATE TABLE IF NOT EXISTS users (
 ### 3.1 邮箱 Magic Link
 
 ```
-User                     PWA                      Worker                 MailChannels            KV
+User                     PWA                      Worker                 Resend                  KV
  │                        │                         │                       │                   │
  │ 输入邮箱               │                         │                       │                   │
  │───────────────────────►│                         │                       │                   │
@@ -104,7 +131,7 @@ User                     PWA                      Worker                 MailCha
  │                        │                         │ ─────────────────────────────────────►     │
  │                        │                         │  {"email",expires_at}                    │
  │                        │                         │                       │                   │
- │                        │                         │ POST /tx/v1/send      │                   │
+ │                        │                         │ POST /emails (Resend) │                   │
  │                        │                         │──────────────────────►│                   │
  │                        │                         │ 邮件: 点击登录         │                   │
  │   ✉️ 收到邮件          │                         │◄──────────────────────│                   │
@@ -130,6 +157,14 @@ User                     PWA                      Worker                 MailCha
  │◄────────────────────────│─────────────────────────│                       │                   │
 ```
 
+**防邮件安全扫描器预取（一次性 token 的关键边界）**：企业邮箱/出口网关会自动 `GET` 邮件里的链接，若 `GET /auth/verify` 直接消费 token 并建 session，用户真点时会撞"链接已使用"。因此拆两步：
+
+- `GET /auth/verify?token=xxx`：只校验 token 存在且未过期，**渲染一个"确认登录"落地页**（含一个 POST 按钮），**不消费 token、不建 session**。
+- `POST /auth/verify`（按钮提交）：此时才删除 token（一次性）、创建/登录用户、生成 session、`Set-Cookie` 后 302。
+- 扫描器只发 GET，拿不到 session；真人点按钮才登录。
+
+**Session Cookie 安全属性**：`Set-Cookie: session_token=<token>; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=2592000`。`HttpOnly` 阻止 JS 读取（防 XSS 窃取）、`Secure` 仅 HTTPS、`SameSite=Lax` 兜住跨站 CSRF。token 为不可猜的随机串，本身不含用户信息。
+
 ### 3.2 Telegram 绑定
 
 ```
@@ -142,7 +177,7 @@ User                   Telegram Bot           Worker              PWA Session   
  │                         │── KV ─────────────►│                     │                │
  │                         │                    │                     │                │
  │                         │ 发邮件含验证码     │                     │                │
- │                         │── MailChannels ───►│                     │                │
+ │                         │── Resend ─────────►│                     │                │
  │                         │                    │                     │                │
  │  ✉️ 收到验证码          │                    │                     │                │
  │                         │                    │                     │                │
@@ -162,6 +197,20 @@ User                   Telegram Bot           Worker              PWA Session   
  │                         │◄───────────────────│                     │                │
 ```
 
+**绑定前置与账号合并**（`POST /auth/bind` 校验码通过后）：
+
+设 TG chat 为 `T`、目标邮箱账号为 `E`：
+
+1. **邮箱账号必须先存在**：`/bind <email>` 时若 `users` 无 `email=<email>` 行，回复"请先在 PWA 用该邮箱登录注册后再绑定"，不发码。避免 `UPDATE ... WHERE email=` 影响 0 行的静默失败。
+2. **目标邮箱已被别的 TG 绑定**：`E.telegram_id` 非空且 ≠ `T` → 拒绝，"该邮箱已绑定其他 Telegram"。
+3. **情形 A（常见）**：`T` 在 `users` 中无独立行（受控准入下通常只有管理员预先存在）→ 直接 `UPDATE users SET telegram_id=T WHERE email=E`。
+4. **情形 B（账号合并）**：`T` 已有自己的 `users` 行 `U_t` 且名下有数据 →
+   - 先 `UPDATE users SET telegram_id=NULL WHERE id=U_t.id`（腾出 `telegram_id` 唯一约束）；
+   - 把 `U_t` 名下数据改挂到 `E`：`UPDATE {vehicles,fuel_records,mileage_records,maintenance_records,reminders} SET user_id=E.id WHERE user_id=U_t.id`；
+   - `UPDATE users SET status='merged' WHERE id=U_t.id`（失活，不物理删，可回溯）；
+   - 最后 `UPDATE users SET telegram_id=T WHERE id=E.id`。
+   - 全程在一个逻辑事务内（D1 batch），任一步失败整体回滚，避免数据半挂。
+
 ### 3.3 Session 管理
 
 | 存储 | Key | Value | TTL |
@@ -171,44 +220,72 @@ User                   Telegram Bot           Worker              PWA Session   
 | PWA 对话历史 | `session:pwa:{user_id}` | `Message[]` | 1 h |
 | 绑定验证码 | `bind_code:{email}` | `{code, telegram_id}` | 10 min |
 
-Session 校验中间件：
+**滑动续期**：每次 session 校验通过后，若该 token 剩余 TTL < 7 天，则用原值重写 KV（`expirationTtl: 30d`）刷新有效期。活跃用户长期免重登，闲置满 30 天自然失效。续期是写操作，仅在跨过阈值时触发，避免每请求都写 KV。
+
+Session 校验中间件（**鉴权在 API 层**，静态 SPA shell 不做服务端重定向，见 ADR-0010）：
 
 ```
-request → 有 Cookie: session_token=xxx?
-    ↓ 否 → 重定向到 /auth/login?redirect=原路径
-    ↓ 是 → KV.get("session:xxx") → 有?
-        ↓ 无 → cookie 过期，重定向到 /auth/login
-        ↓ 有 → 解析 user_id → 注入后续请求
+静态资源请求（SPA shell / JS / css）：
+    → [assets] 直接公开返回（壳内无用户数据，不校验）
 
-API 请求的鉴权：
-  Cookie: session_token=xxx (PWA)
-  或 x-user-id header (内部/REST)
-  或 token=xxx query param (旧仪表盘兼容)
+API 请求（/chat/api、/api/v1/*、/auth/logout…）：
+    → 有 Cookie: session_token=xxx?
+        ↓ 否 → 401
+        ↓ 是 → KV.get("session:xxx") → 有?
+            ↓ 无（过期）→ 401
+            ↓ 有 → 滑动续期 → 解析 user_id → 注入后续处理
+    → 前端收到 401 → 客户端路由跳 /login（保留 redirect）
+
+兼容旧仪表盘：/api/v1/* 额外接受 ?token=xxx（管理员，30 天过渡期）
+
+例外 GET /auth/verify：邮件直达，Worker 返回最小服务端 HTML 确认页（非 SPA）
 ```
 
 ---
 
-## 4. PWA 前端页面
+## 4. PWA 前端（web/ Svelte SPA）
 
-### 4.1 页面结构
+> 决策见 [ADR-0010](../../engineering/adr/0010-frontend-svelte-spa-static-assets.md)。前端从 `dashboard-html.ts` 字符串模式迁出，独立成 `web/` 子项目，Vite + Svelte 构建成静态资源，由现有 Worker 经 `wrangler.toml` 的 `[assets]` 绑定托管。
 
-Worker 新增以下路由：
+### 4.1 项目结构与路由划分
 
-| 路径 | 方法 | 文件 | 说明 |
-|------|------|------|------|
-| `/auth/login` | GET | `src/routes/auth-html.ts` | 登录页（输入邮箱） |
-| `/auth/verify` | GET | `src/routes/auth-handler.ts` | Magic link 回调（验证 → 302） |
-| `/auth/bind` | POST | `src/routes/auth-handler.ts` | Telegram 绑定验证码 |
-| `/auth/send-link` | POST | `src/routes/auth-handler.ts` | 发送魔法链接 |
-| `/auth/logout` | POST | `src/routes/auth-handler.ts` | 登出（清除 session） |
-| `/chat` | GET | `src/routes/chat-html.ts` | 对话界面（主页面） |
-| `/chat/api` | POST | `src/routes/chat-api.ts` | 对话 API（已有 `/api/v1/chat` 扩展） |
-| `/chat/voice` | POST | `src/routes/chat-api.ts` | 语音上传+转写+对话 |
-| `/settings` | GET | `src/routes/settings-html.ts` | 设置页（语言/绑定/登出） |
-| `/manifest.json` | GET | 内联在 Worker | PWA manifest |
-| `/dashboard*` | 已有 | `src/routes/dashboard-html.ts` | 已有仪表盘，加 user_id 过滤 |
+```
+web/                          # 新前端子项目（独立 package.json，devDeps：vite + svelte）
+  public/
+    manifest.json             # PWA manifest（静态文件，不再内联 Worker）
+    icon-192.png / icon-512.png
+  src/
+    main.ts                   # SPA 入口，挂载根组件 + 客户端路由
+    routes/
+      Chat.svelte             # 对话主页（气泡 + 快捷面板 + 录音）
+      Login.svelte            # 邮箱登录（POST /auth/send-link）
+      Settings.svelte         # 语言 / 绑定状态 / 登出
+      Dashboard.svelte        # 仪表盘（迁移边界见 §4.5）
+    lib/
+      api.ts                  # fetch 封装：带 cookie、统一 401 → 跳 /login
+      session.ts              # 客户端登录态（来自 /api/v1/me）
+      i18n.ts                 # 双语（?lang= / localStorage）
+    components/
+      TopBar.svelte  Bubble.svelte  QuickPanel.svelte  Recorder.svelte
+    theme.css                 # 复用现有 dashboard 的 :root 设计 token
+  vite.config.ts
+  → npm run build → web/dist/（部署时由 [assets] 托管）
+```
 
-### 4.2 对话界面设计 (`/chat`)
+**路由划分**：客户端路由（SPA 内，刷新兜底到 `index.html`）vs 服务端端点（Worker 代码）：
+
+| 路径 | 类型 | 由谁处理 | 说明 |
+|------|------|---------|------|
+| `/` `/login` `/chat` `/settings` `/dashboard` | 客户端路由 | `[assets]` → SPA shell | 公开返回壳，数据靠 API；SPA 内导航 |
+| `/manifest.json` `/assets/*` `/icon-*.png` | 静态资源 | `[assets]` | Vite 构建产物 |
+| `POST /auth/send-link` `/auth/bind` `/auth/logout` | 服务端 | `src/routes/auth-handler.ts` | JSON 进出 |
+| `GET /auth/verify` / `POST /auth/verify` | 服务端 | `src/routes/auth-handler.ts` | GET=最小 HTML 确认页；POST=建 session（防预取，§3.1） |
+| `POST /chat/api` `/chat/voice` | 服务端 | `src/routes/chat-api.ts` | session 鉴权 → Agent Loop |
+| `GET /api/v1/*`（含新增 `/me`） | 服务端 | `src/routes/api.ts` | session/旧 token 鉴权 + `user_id` 过滤 |
+
+> 不再有 `auth-html.ts` / `chat-html.ts` / `settings-html.ts` 这类返回 HTML 字符串的 Worker 路由——这些页面都是 `web/` 里的 `.svelte`。Worker 侧只剩**端点**。
+
+### 4.2 对话界面设计（Chat.svelte）
 
 核心功能：
 - 消息气泡（用户右，Bot 左），带 emoji 和交互时间戳
@@ -247,21 +324,22 @@ Worker 新增以下路由：
 
 ### 4.3 语音输入
 
-浏览器侧：
+`Recorder.svelte`（浏览器侧）：
 ```
 navigator.mediaDevices.getUserMedia({audio: true})
   → MediaRecorder → chunks → Blob (webm/opus)
-  → POST /chat/voice (multipart/form-data)
+  → POST /chat/voice (multipart/form-data, 带 cookie)
 ```
 
-Worker 侧：
+Worker 侧（`chat-api.ts`）：
 ```
-接收录音 → 格式转换（如需，目前 Whisper 支持 webm/opus）→ 调 stt.ts 的 transcribe()
-  → 转文字 → 走现有 Agent Loop
-  → 返回回复文本
+接收录音 → 校验 session → 调 stt.ts 的 transcribe()（Whisper 支持 webm/opus）
+  → 转文字 → 注入 user_id → 走现有 Agent Loop → 返回 { text, reply }
 ```
 
 ### 4.4 PWA Manifest
+
+`web/public/manifest.json`（**静态文件**，由 Vite 原样产出到 `dist/`，不再内联 Worker）；图标用真实 PNG（部分平台安装需要，避免 SVG/MIME 坑）：
 
 ```json
 {
@@ -272,119 +350,133 @@ Worker 侧：
   "display": "standalone",
   "background_color": "#111827",
   "theme_color": "#f59e0b",
-  "icons": [{ "src": "/icon.png", "sizes": "192x192", "type": "image/png" }]
+  "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
 }
 ```
 
-### 4.5 已有仪表盘修改
+### 4.5 仪表盘迁移边界
 
-- 原有 `/dashboard` 路径：增加用户校验中间件
-- 现有 API `/api/v1/*` 端点：增加 `user_id` 过滤参数，从 session cookie 获取用户，而非 token 参数
-- 兼容期：两种鉴权方式并存（旧 `token=` 参数 + 新 session cookie）
+仪表盘最终成为 SPA 的一个路由（`Dashboard.svelte`），但为**控制本期范围**分两步：
+
+- **本期**：先打通 `Chat` / `Login` / `Settings` 三页 + 鉴权；现有 `src/routes/dashboard-html.ts` **暂保留可用**，`Dashboard.svelte` 可先用 `<iframe>` 或外链指向旧 `/dashboard`，SPA 顶栏/快捷面板能跳过去即可。
+- **后续**：把图表逻辑迁进 `Dashboard.svelte`、消费 `/api/v1/*`，删除 `dashboard-html.ts`。
+- **两期都要做**：`src/routes/api.ts` 的 `/api/v1/*` 加 session cookie 鉴权（旧 `token=` 30 天过渡）+ `user_id` 过滤——这是数据隔离的一部分，不可延后（见 §5）。
 
 ---
 
 ## 5. 数据隔离（database.ts 改动）
 
-所有涉及多表 JOIN 或单表查询的函数，增加 `user_id` 过滤条件。
+隔离是**安全边界**，按以下三原则收口，不留"按需再改"的灰区：
 
-### 改造原则
+1. **直接列、不靠 JOIN**：所有读/写都按记录自身的 `user_id` 过滤。不依赖 `vehicle_id → vehicles.user_id` 关联——那样 `vehicle_id IS NULL` 的孤儿记录会落在隔离之外（跨用户泄露）。写入时 `user_id` 与 `vehicle_id` 同时落库。
+2. **默认拒绝**：每个读函数**必须**接收 `userId` 且 WHERE 带 `user_id = ?`。**没有 `userId` 的读查询一律视为 bug**（code review / 测试卡死）。宁可多传一个参数，不可漏过滤。
+3. **来源单一**：`userId` 一律由中间件解析后显式传入数据层，不在数据层内部猜。
+   - Telegram 入口：`chat_id` → `getUserByTelegramId` → `user.id`
+   - PWA 入口：session cookie → `session.user_id`
 
-- `user_id` 参数从 Session 中间件提取，通过请求上下文或显式参数传入。
-- Telegram 入口：`user_id` 从 `chat_id` 查 `users.telegram_id` 得到
-- PWA 入口：`user_id` 从 session cookie 解析得到
-
-### 关键变更函数
+### 关键变更函数（一次性全量收口，非渐进）
 
 | 函数 | 变更 |
 |------|------|
-| `insertFuelRecord` | 新增 `user_id` 参数 |
-| `getLastFuelRecord(vehicleId, userId)` | 加 user_id 过滤 |
-| `getRecentFuelRecords(limit, userId)` | 加 user_id 过滤（通过 vehicle） |
-| `getFuelRecordsByDateRange(since, until, userId)` | 加 user_id 过滤（JOIN vehicles） |
-| `queryStats(...)` | 已通过 `getFuelRecordsByDateRange` 链式传递 |
-| `getVehicles(userId)` | 新增，替代原有全量查询 |
-| `insertVehicle(...)` | 新增 `user_id` 参数 |
+| `insertFuelRecord` / `insertMileageRecord` / `insertMaintenanceRecord` | 新增 `user_id` 参数，落库 |
+| `insertVehicle` / `getVehicles` | 新增 / 改为带 `user_id` 参数，替代全量查询 |
+| `getLastFuelRecord(vehicleId, userId)` | 加 `user_id = ?` |
+| `getRecentFuelRecords(limit, userId)` | 加 `user_id = ?`（直接列，非 JOIN） |
+| `getFuelRecordsByDateRange(since, until, userId)` | 加 `user_id = ?`（直接列，非 JOIN） |
+| `getLatestOdometer` / `getMaintenanceRecords` / `findFuelRecords` / `findMaintenanceRecords` 等所有定位/读取 | 加 `user_id = ?` |
+| `queryStats(...)` | 经 `getFuelRecordsByDateRange` 链式传递 `userId` |
+| `reminders` 读取（cron 除外）| 加 `user_id = ?` |
 
-> 工具层（`src/tools/`）对应工具调用时传入当前用户 ID。
+> 工具层（`src/tools/`）由 `dispatchTool` 注入当前 `user_id`（见 §12），不暴露给 LLM。
+> cron（`scheduled.ts`）是唯一**跨用户**读取 `reminders` 的路径，见 §16。
 
 ---
 
 ## 6. 中间件设计
 
-### 6.1 PWA 认证中间件
+静态 SPA 模式下**没有页面级服务端重定向**（ADR-0010）：`[assets]` 把 SPA shell 公开返回，鉴权只在 **API 端点**做，无效 session 一律 **401**，由前端 `lib/api.ts` 统一捕获后客户端跳 `/login`。
+
+### 6.1 API 鉴权中间件（解析 user，不重定向）
 
 ```typescript
-// 在 index.ts 的 fetch() 中新增 path-based 中间件
-async function pwaAuth(request, env): Promise<{ user: User | null; response: Response | null }> {
-  const url = new URL(request.url);
-
-  // 公开路径不校验
-  const publicPaths = ['/auth/login', '/auth/send-link', '/auth/verify',
-                        '/manifest.json', '/ping'];
-  if (publicPaths.some(p => url.pathname.startsWith(p))) {
-    return { user: null, response: null };
-  }
-
-  // 从 Cookie 提取 session token
+// 仅对 API 端点调用（/chat/*、/api/v1/*、/auth/logout…）；静态资源由 [assets] 先行接管
+async function resolveSession(request, env): Promise<Session | null> {
   const cookie = request.headers.get('Cookie') || '';
-  const match = cookie.match(/session_token=([^;]+)/);
-  const token = match?.[1] || url.searchParams.get('token');
+  const token = cookie.match(/session_token=([^;]+)/)?.[1];
 
-  if (!token) {
-    return { user: null, response: Response.redirect(`${url.origin}/auth/login?redirect=${encodeURIComponent(url.pathname)}`, 302) };
+  if (token) {
+    const raw = await env.SESSION_KV.get(`session:${token}`);
+    if (raw) {
+      const session = JSON.parse(raw);
+      await maybeRenew(env, token, session);   // 滑动续期（§3.3）
+      return session;
+    }
   }
-
-  const raw = await env.SESSION_KV.get(`session:${token}`);
-  if (!raw) {
-    return { user: null, response: Response.redirect(`${url.origin}/auth/login?redirect=${encodeURIComponent(url.pathname)}`, 302) };
-  }
-
-  const session = JSON.parse(raw);
-  return { user: session, response: null };
+  return null;   // 调用方据此返回 401
 }
 ```
 
-### 6.2 API 鉴权
+调用方模式：`const s = await resolveSession(req, env); if (!s) return json(401, {error:'unauthorized'});`
+
+> **GET /auth/verify 例外**：邮件链接直达，不是 API、也不属 SPA——由 `auth-handler.ts` 返回最小服务端 HTML 确认页（含 POST 按钮），防安全网关预取（§3.1）。
+
+> **CSRF**：Cookie 自动携带凭证，所有改状态端点（`POST /chat/api`、`/chat/voice`、`/auth/*`）靠 `SameSite=Lax` 兜底，并校验 `Origin`/`Referer` 同源；`GET` 无副作用。
+
+### 6.2 仪表盘 API 兼容鉴权
 
 ```typescript
-// 在 handleApiRequest 中扩展鉴权逻辑
-// 1. 先检查旧 token 参数（兼容旧 Dashboard）
-// 2. 再检查 Cookie session_token
-// 3. 最后检查 Authorization header (X-User-Id)
-// 解析得到 user_id 后传给查询函数
+// src/routes/api.ts 的 /api/v1/*：
+// 1. resolveSession(cookie) → 有则用 session.user_id（PWA 路径）
+// 2. 否则回退旧 ?token= 比对（管理员，30 天过渡期）→ 管理员 user_id
+// 3. 都没有 → 401
+// 解析出的 user_id 传给所有查询函数（§5 默认拒绝）
 ```
 
 ---
 
-## 7. MailChannels 集成
+## 7. Resend 集成
 
-API 调用方式（无需 API key，从 Cloudflare Workers 网络发出）：
+> MailChannels 对 Cloudflare Workers 的免费发信已于 2024-08-31 终止，改用 Resend 免费层（100 封/天）。需 `RESEND_API_KEY`（secret）+ 在 Resend 验证 `SENDER_EMAIL` 所属域名（SPF/DKIM/DMARC DNS，一次性）。
+
+封装在 `src/services/mail.ts`，两类邮件（Magic Link / 绑定验证码）共用底层 `sendEmail`：
 
 ```typescript
-async function sendMagicLinkEmail(email: string, link: string, env: Env): Promise<void> {
-  const domain = new URL(env.DASHBOARD_URL || 'https://moto-bot.example.com').hostname;
-
-  const resp = await fetch('https://api.mailchannels.net/tx/v1/send', {
+async function sendEmail(env: Env, to: string, subject: string, text: string): Promise<void> {
+  const resp = await fetch('https://api.resend.com/emails', {
     method: 'POST',
-    headers: { 'content-type': 'application/json' },
+    headers: {
+      'authorization': `Bearer ${env.RESEND_API_KEY}`,
+      'content-type': 'application/json',
+    },
     body: JSON.stringify({
-      personalizations: [{ to: [{ email }] }],
-      from: { email: `noreply@${domain}`, name: 'Moto Bot' },
-      subject: '🔑 Moto Bot 登录链接',
-      content: [{
-        type: 'text/plain',
-        value: `点击以下链接登录 Moto Bot（15分钟内有效）：\n\n${link}\n\n如果非本人操作，请忽略此邮件。`
-      }]
-    })
+      from: `Moto Bot <${env.SENDER_EMAIL}>`,  // 须属于 Resend 已验证域名
+      to: [to],
+      subject,
+      text,
+    }),
   });
 
   if (!resp.ok) {
-    console.error('[mail] send failed:', await resp.text());
+    console.error('[mail] resend send failed:', resp.status, await resp.text());
     throw new Error('邮件发送失败');
   }
 }
+
+async function sendMagicLinkEmail(env: Env, email: string, link: string): Promise<void> {
+  await sendEmail(env, email, '🔑 Moto Bot 登录链接',
+    `点击以下链接登录 Moto Bot（15 分钟内有效）：\n\n${link}\n\n如果非本人操作，请忽略此邮件。`);
+}
+
+async function sendBindCodeEmail(env: Env, email: string, code: string): Promise<void> {
+  await sendEmail(env, email, '🔗 Moto Bot 绑定验证码',
+    `你的绑定验证码是 ${code}（10 分钟内有效）。\n请在 PWA 设置页输入完成 Telegram 绑定。\n\n如果非本人操作，请忽略此邮件。`);
+}
 ```
+
+> `RESEND_API_KEY` 经 `wrangler secret put RESEND_API_KEY` 注入，绝不进 git（CLAUDE.md §2 黄金法则 7）。本地开发放 `.dev.vars`。
 
 ---
 
@@ -430,9 +522,14 @@ User                    PWA Worker                    Agent Loop                
 | 场景 | 处理 |
 |------|------|
 | 邮箱输入格式不对 | 前端校验 + 后端二次校验，返回可读错误 |
-| MailChannels 发信失败 | 返回"邮件发送失败，请稍后重试"，日志记录详情 |
+| Resend 发信失败 | 返回"邮件发送失败，请稍后重试"，日志记录 status + body |
+| Resend 当日 100 封超限 | 返回"今日发信达上限，请稍后再试"，日志告警；接近上限考虑升档 |
+| 发信被刷（同邮箱/IP 高频） | `email+IP` 限流命中 → "请求过于频繁，请稍后再试"，不发信 |
+| 邮件安全网关预取链接 | `GET /auth/verify` 仅渲染确认页、不消费 token；真人 POST 才登录 |
 | Magic Link 已被使用 | 显示"此链接已使用过，请重新申请" |
 | Magic Link 过期 | 显示"链接已过期，请重新申请"，返回登录页 |
+| 绑定目标邮箱未注册 | `/bind` 回复"请先在 PWA 用该邮箱登录注册后再绑定" |
+| 绑定时账号合并冲突 | 合并在 D1 batch 事务内，先清旧 `telegram_id` 再迁数据，失败整体回滚 |
 | Session token 过期 | 静默跳转到登录页（保留返回路径） |
 | 语音录音权限被拒 | 按钮置灰，提示"请在浏览器设置中允许麦克风" |
 | 语音识别失败 | 返回"没听清，请打字或再录一次" |
@@ -446,24 +543,29 @@ User                    PWA Worker                    Agent Loop                
 
 ## 10. 存量数据迁移
 
-部署时需要一次性迁移存量单用户数据：
+迁移 `0009` 建表/加列后，跑一次性数据迁移脚本 `scripts/migrate-single-user.ts`（幂等，可重跑），把存量单用户数据归到管理员。`ALLOWED_CHAT_ID` 作为参数传入（`?`）：
 
 ```sql
 -- Step 1: 创建管理员用户（ALLOWED_CHAT_ID 对应的用户）
 INSERT INTO users (telegram_id, email, nickname, lang, is_admin)
-VALUES (?, 'admin@local', 'Admin', 'zh', 1)
+VALUES (?, NULL, 'Admin', 'zh', 1)
 ON CONFLICT(telegram_id) DO NOTHING;
 
--- Step 2: 将存量数据归到管理员用户
-UPDATE vehicles SET user_id = (SELECT id FROM users WHERE telegram_id = ? LIMIT 1)
-WHERE user_id IS NULL;
+-- 取管理员 id（后续步骤复用）
+-- adminId = SELECT id FROM users WHERE telegram_id = ?
 
--- Step 3: 将已有 reminders 的 chat_id 关联到管理员
-UPDATE reminders SET chat_id = (SELECT id FROM users WHERE telegram_id = reminders.chat_id LIMIT 1)
-WHERE chat_id IS NOT NULL;
+-- Step 2: 把所有归属未定的存量数据挂到管理员（只填空，不覆盖已有 user_id）
+UPDATE vehicles            SET user_id = :adminId WHERE user_id IS NULL;
+UPDATE fuel_records        SET user_id = :adminId WHERE user_id IS NULL;
+UPDATE mileage_records     SET user_id = :adminId WHERE user_id IS NULL;
+UPDATE maintenance_records SET user_id = :adminId WHERE user_id IS NULL;
+
+-- Step 3: reminders 归属填 user_id —— chat_id 保持原值不动（cron 推送目标）
+UPDATE reminders SET user_id = :adminId WHERE user_id IS NULL;
 ```
 
-> 注意：`reminders.chat_id` 字段原意是 TG chat_id，迁移后改为 user_id 引用。
+> **关键纠正**：旧方案曾把 `reminders.chat_id` 原地改写成 `user_id`，会让 cron 的 `sendMessage(Number(chat_id))` 推到不存在的会话、提醒静默失效，且违反"只增不删"。现改为：归属走**新列 `user_id`**，`chat_id`（Telegram 推送目标）**原值保留**。
+> 幂等性：所有 `UPDATE ... WHERE user_id IS NULL` 二次运行不再命中行；`INSERT ... ON CONFLICT DO NOTHING` 重跑无副作用。
 
 ---
 
@@ -475,8 +577,9 @@ WHERE chat_id IS NOT NULL;
 | 旧 Dashboard token | token 参数继续有效（管理员访问），PWA 用户使用 session cookie |
 | `/api/v1/*` 端点 | 适配 session 鉴权，旧 token 兼容 30 天过渡期 |
 | 旧 `ALLOWED_CHAT_ID` | 保留为管理员标识，Bot 白名单仍用它 |
-| 新用户从 Telegram 首次使用 | 自动创建 `users` 记录（`telegram_id` 主键，email 暂空） |
-| 新用户从 PWA 首次使用 | 创建 `users` 记录（email 主键，telegram_id 暂空） |
+| 陌生人从 Telegram 首次使用 | **不自动建号**（受控准入）：非管理员且未绑定的 chat → 提示"请先在 PWA 用邮箱注册并 /bind 绑定"。避免未鉴权的 LLM 成本敞口 |
+| 新用户从 PWA 首次使用 | 创建 `users` 记录（email 主键，telegram_id 暂空）——邮箱是唯一开放注册入口 |
+| 已绑定用户从 Telegram 使用 | `chat_id` → `getUserByTelegramId` → 正常服务，数据按 `user_id` 隔离 |
 
 ---
 
@@ -518,11 +621,14 @@ System prompt 新增一段说明（中英文版）：
 
 | 风险 | 缓解 |
 |------|------|
-| MailChannels 邮件被标记为垃圾邮件 | 配置 SPF/DKIM/DMARC；文案明确指出发件源；备选：Resend 免费层 |
-| Session token 安全性（存储在 localStorage） | Token 不包含用户信息，过期即废；后续可迁移到 httpOnly cookie 由 Worker set-cookie |
+| Resend 邮件被标记为垃圾邮件 | 在 Resend 验证域名并配置 SPF/DKIM/DMARC；文案标明发件源；监控退信率 |
+| Resend 免费层 100 封/天被打满 | `email+IP` 限流挡滥用；日志告警；超量时升 Resend 付费档或换 provider（ADR） |
+| 发信端点被当成邮件轰炸/反射器 | `/auth/send-link`、`/bind` 按 `email+IP` 限流（如 5 次/15min）；匿名也限 |
+| Session token 被窃取 | `HttpOnly; Secure; SameSite=Lax` cookie，JS 读不到、仅 HTTPS、防 CSRF；token 随机不含用户信息，过期即废 |
 | KV 最终一致性可能导致短时 session 不一致 | Session token 在 KV 写入后秒级可见，可接受；Magic Link 要求 token 存在才有效 |
-| 多用户后 LLM 成本上升 | 保持每用户限流（已有）；后续可加用量配额 |
-| 修改 database.ts 带 user_id 影响范围大 | 渐进式改造，先改核心查询路径，非紧急路径按需改 |
+| 多用户后 LLM 成本上升 | TG 受控准入（不开放自注册）+ 每用户限流（已有）；后续可加用量配额 |
+| database.ts 带 user_id 影响范围大 | **一次性全量收口**（安全边界不做渐进）：所有读路径强制 `userId`，缺失即测试失败，杜绝漏过滤泄露 |
+| cron 多用户后推错人 | `reminders.chat_id` 保留为推送目标、新增 `user_id` 仅作归属；cron 按 chat_id 推、按用户 lang 取文案（§16） |
 
 ---
 
@@ -532,11 +638,28 @@ System prompt 新增一段说明（中英文版）：
 
 | 维度 | 测试 |
 |------|------|
-| 认证流程 | Magic link 生成/验证/过期；session 创建/过期/续期 |
-| 数据隔离 | 用户 A 创建记录后用户 B 查询不到；多用户同时使用不交叉 |
+| 认证流程 | Magic link 生成/验证/过期/一次性；session 创建/过期/滑动续期 |
+| 防预取 | `GET /auth/verify` 不消费 token、不建 session；`POST /auth/verify` 才登录 |
+| 数据隔离 | 用户 A 创建记录后 B 查询不到；`vehicle_id` 为空的孤儿记录也只对属主可见；读函数缺 `userId` 时测试失败 |
+| 账号合并 | TG-only 账号 `/bind` 到邮箱账号 → 数据改挂、旧号 `status=merged`、唯一约束不冲突 |
 | PWA 对话 | POST /chat/api 带 session → 返回回复；不带 session → 401 |
-| Telegram 绑定 | /bind 命令→ 验证码 → POST /auth/bind → 关联成功 |
+| Telegram 绑定 | /bind → 验证码（mock Resend）→ POST /auth/bind 正确/错误码 → 关联/拒绝 |
+| 邮箱未注册先绑定 | /bind 未注册邮箱 → 提示先注册、不发码 |
 | 语音 | 模拟录音上传 → Whisper mock → 回复 |
-| 存量迁移 | 空库迁移、有数据迁移、重复迁移幂等 |
-| 兼容性 | 旧 Dashboard token 仍能访问自己数据 |
-| 限流 | 认证端点 5 次/5min 限制 |
+| 存量迁移 | 空库迁移、有数据迁移、重复迁移幂等；`reminders.chat_id` 不被改写 |
+| cron 多用户 | 多用户各有到期提醒 → 按各自 chat_id 推送、按 lang 取文案 |
+| 兼容性 | 旧 Dashboard token 仍能访问管理员数据 |
+| 限流 | `/auth/send-link`、`/bind` 按 `email+IP` 5 次/15min 限制 |
+
+---
+
+## 16. cron（scheduled.ts）多用户化
+
+现状：`src/scheduled.ts` 无用户上下文，到期提醒 `const target = r.chat_id ?? env.ALLOWED_CHAT_ID` 后 `bot.api.sendMessage(Number(target), text)`，文案默认中文。多用户后需要：
+
+- **推送目标**：仍用 `reminders.chat_id`（未设置则回退该 reminder 属主用户的 `users.telegram_id`，最后才回退 `ALLOWED_CHAT_ID`）。未绑定 TG 的纯 PWA 用户暂不推送（Phase 4 加站内/邮件提醒）。
+- **文案语言**：按属主 `users.lang` 选 `zh/en`（经 `reminders.user_id → users.lang`），不再硬编码中文。
+- **自动续期**：续期写回的新 reminder 继承原 `user_id` 与 `chat_id`。
+- **隔离豁免**：cron 是唯一合法跨用户读 `reminders` 的路径（扫全表找到期项），但每条推送严格按该行 `user_id`/`chat_id` 定向，不串号。
+
+> 对应任务见 tasks T 序列新增的「cron 多用户化」条目。
