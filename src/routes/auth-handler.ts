@@ -16,6 +16,7 @@ import {
   getUserByEmail, getUserById, createUser, updateUserLastLogin, bindTelegramToUser,
   getOrCreateTelegramUser,
 } from '../database';
+import { verifyAutoLoginToken } from '../services/auto-login';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -201,23 +202,14 @@ async function bindConsume(request: Request, env: Env): Promise<Response> {
   });
 }
 
-// ── GET /auth/auto-login?t= —— TG /dashboard 链接附带的一次性登录 token ──────
-// 用户从 Telegram 点 dashboard 链接 → 验证 token → get-or-create 用户 → 建 session → 302 /dashboard。
-// 不需要确认页（TG 里点链接本身即为确认），GET 即消费（非 magic link 的邮件预取场景）。
-
-const AUTO_LOGIN_TTL = 300;  // 5 分钟，一次性
+// ── GET /auth/auto-login?t= —— 自包含 HMAC 签名 token，零 KV，零状态 ────────
 
 async function autoLogin(request: Request, env: Env): Promise<Response> {
   const token = new URL(request.url).searchParams.get('t') || '';
-  const raw = await env.SESSION_KV.get(`auto_login:${token}`);
-  if (!raw) return html(410, page('链接已失效', '登录链接已过期或已被使用，请回到 Telegram 重新输入 /dashboard。'));
-  await env.SESSION_KV.delete(`auto_login:${token}`);   // 一次性消费
+  const telegramId = await verifyAutoLoginToken(token, env.TELEGRAM_WEBHOOK_SECRET);
+  if (!telegramId) return html(410, page('链接已失效', '登录链接已过期或已被使用，请回到 Telegram 重新输入 /dashboard。'));
 
-  const rec = JSON.parse(raw) as { telegram_id: string; expiresAt: number };
-  if (rec.expiresAt && nowSec() >= rec.expiresAt) return html(410, page('链接已失效', '登录链接已过期，请回到 Telegram 重新输入 /dashboard。'));
-
-  // get-or-create：TG 用户已存在则用现有账号，否则自动建号（开放自助）
-  const userId = await getOrCreateTelegramUser(env.DB, rec.telegram_id);
+  const userId = await getOrCreateTelegramUser(env.DB, telegramId);
   await updateUserLastLogin(env.DB, userId, new Date().toISOString());
 
   const sToken = await createSession(env.SESSION_KV, { user_id: userId, email: null });

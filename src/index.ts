@@ -13,6 +13,7 @@ import { handleAuthRequest } from './routes/auth-handler';
 import { handleChatRequest } from './routes/chat-api';
 import { checkRateLimit, RULES } from './gateway/rate-limiter';
 import { sendBindLinkEmail } from './services/mail';
+import { signAutoLoginToken } from './services/auto-login';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -87,15 +88,9 @@ function createBot(env: Env): Bot {
     const chatId = ctx.chat.id.toString();
     const lang = await resolveLang(env, chatId, ctx.from?.language_code);
 
-    // 生成一次性 auto-login token：用户从 TG 点链接 → 自动登录 → 直接进看板
-    const token = crypto.randomUUID();
-    const expiresAt = Math.floor(Date.now() / 1000) + 300;  // 5 分钟
-    await env.SESSION_KV.put(
-      `auto_login:${token}`,
-      JSON.stringify({ telegram_id: chatId, expiresAt }),
-      { expirationTtl: 300 },
-    );
-    const link = `${origin}/auth/auto-login?t=${token}`;
+    // HMAC 签名 token（自包含，零 KV）：用户从 TG 点链接 → 自动登录 → 直接进看板
+    const token = await signAutoLoginToken(chatId, env.TELEGRAM_WEBHOOK_SECRET);
+    const link = `${origin}/auth/auto-login?t=${encodeURIComponent(token)}`;
     return ctx.reply(t('dashboard.link', lang, link), { parse_mode: 'HTML' });
   });
 
