@@ -47,6 +47,19 @@ export interface ResolvedToolCall {
   input: Record<string, unknown>;
 }
 
+// 用户（spec 016 多用户）。email / telegram_id 任一可空。
+export interface User {
+  id: number;
+  email: string | null;
+  telegram_id: string | null;
+  nickname: string | null;
+  lang: 'zh' | 'en';
+  is_admin: number;                   // 0 | 1
+  status: 'active' | 'merged';        // merged=账号合并后失活
+  created_at: string;
+  last_login: string | null;
+}
+
 export interface FuelRecord {
   id: number;
   date: string;
@@ -57,6 +70,7 @@ export interface FuelRecord {
   note: string | null;
   vehicle_id: number | null;
   deleted_at: string | null;
+  user_id: number | null;             // 所属用户（spec 016）
   created_at: string;
 }
 
@@ -84,6 +98,7 @@ export interface MaintenanceRecord {
   note: string | null;
   vehicle_id: number | null;
   deleted_at: string | null;   // 软删除时刻（spec 017，null=活跃）
+  user_id: number | null;      // 所属用户（spec 016）
   created_at: string;
 }
 
@@ -97,6 +112,7 @@ export interface Reminder {
   interval_km: number | null;
   note: string | null;
   chat_id: string | null;
+  user_id: number | null;      // 所属用户（spec 016）；与 chat_id 解耦
   status: 'active' | 'done';
   fired_at: string | null;
   created_at: string;

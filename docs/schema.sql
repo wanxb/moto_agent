@@ -1,5 +1,18 @@
 -- 全新数据库初始化。已有库的演进走 migrations/ 顺序迁移（见 docs/engineering/data-model.md §5）。
 
+-- 用户表（spec 016 多用户）。账号主体；email / telegram_id 任一可空，UNIQUE 允许多个 NULL。
+CREATE TABLE IF NOT EXISTS users (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    email       TEXT    UNIQUE,                    -- 邮箱（PWA 用户必填，tg-only 用户暂空）
+    telegram_id TEXT    UNIQUE,                    -- Telegram chat_id（tg 用户必填）
+    nickname    TEXT,                              -- 昵称（可选）
+    lang        TEXT    NOT NULL DEFAULT 'zh',     -- 语言偏好 'zh' | 'en'
+    is_admin    INTEGER NOT NULL DEFAULT 0,        -- 1=管理员（存量数据迁移目标）
+    status      TEXT    NOT NULL DEFAULT 'active', -- 'active' | 'merged'（账号合并后失活）
+    created_at  TEXT    NOT NULL DEFAULT (datetime('now')),
+    last_login  TEXT                               -- 最近登录时间
+);
+
 -- 车辆表（spec 001 多车管理）
 CREATE TABLE IF NOT EXISTS vehicles (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -28,6 +41,7 @@ CREATE TABLE IF NOT EXISTS fuel_records (
     note        TEXT,
     vehicle_id  INTEGER,                          -- 所属车辆（spec 001）
     deleted_at  TEXT,                             -- 软删除时刻（spec 004，NULL=活跃）
+    user_id     INTEGER,                          -- 所属用户（spec 016）
     created_at  TEXT    NOT NULL DEFAULT (datetime('now'))
 );
 
@@ -37,6 +51,7 @@ CREATE TABLE IF NOT EXISTS mileage_records (
     odometer    REAL    NOT NULL,
     note        TEXT,
     vehicle_id  INTEGER,                          -- 所属车辆（spec 001）
+    user_id     INTEGER,                          -- 所属用户（spec 016）
     created_at  TEXT    NOT NULL DEFAULT (datetime('now'))
 );
 
@@ -50,6 +65,7 @@ CREATE TABLE IF NOT EXISTS maintenance_records (
     note        TEXT,
     vehicle_id  INTEGER,                        -- 所属车辆（spec 001）
     deleted_at  TEXT,                           -- 软删除时刻（spec 017，NULL=活跃）
+    user_id     INTEGER,                        -- 所属用户（spec 016）
     created_at  TEXT    NOT NULL DEFAULT (datetime('now'))
 );
 
@@ -64,6 +80,7 @@ CREATE TABLE IF NOT EXISTS reminders (
     interval_km      REAL,                          -- 里程续期间隔（spec 006，NULL=一次性）
     note             TEXT,
     chat_id          TEXT,                          -- 推送目标（空→用 ALLOWED_CHAT_ID）
+    user_id          INTEGER,                       -- 所属用户（spec 016）；与 chat_id 解耦
     status           TEXT    NOT NULL DEFAULT 'active',
     fired_at         TEXT,
     created_at       TEXT    NOT NULL DEFAULT (datetime('now'))
@@ -79,6 +96,13 @@ CREATE INDEX IF NOT EXISTS idx_maint_deleted   ON maintenance_records(deleted_at
 CREATE INDEX IF NOT EXISTS idx_reminders_status  ON reminders(status);
 CREATE INDEX IF NOT EXISTS idx_reminders_vehicle ON reminders(vehicle_id);
 CREATE INDEX IF NOT EXISTS idx_fuel_deleted      ON fuel_records(deleted_at);
+
+-- 多用户隔离索引（spec 016）
+CREATE INDEX IF NOT EXISTS idx_fuel_user      ON fuel_records(user_id);
+CREATE INDEX IF NOT EXISTS idx_mileage_user   ON mileage_records(user_id);
+CREATE INDEX IF NOT EXISTS idx_maint_user     ON maintenance_records(user_id);
+CREATE INDEX IF NOT EXISTS idx_reminders_user ON reminders(user_id);
+CREATE INDEX IF NOT EXISTS idx_vehicles_user  ON vehicles(user_id);
 
 -- 知识库 RAG（spec 015）
 CREATE TABLE IF NOT EXISTS knowledge_chunks (

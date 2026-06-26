@@ -2,6 +2,17 @@
 
 export async function initDB(db: D1Database): Promise<void> {
   await db.batch([
+    db.prepare(`CREATE TABLE IF NOT EXISTS users (
+      id          INTEGER PRIMARY KEY AUTOINCREMENT,
+      email       TEXT    UNIQUE,
+      telegram_id TEXT    UNIQUE,
+      nickname    TEXT,
+      lang        TEXT    NOT NULL DEFAULT 'zh',
+      is_admin    INTEGER NOT NULL DEFAULT 0,
+      status      TEXT    NOT NULL DEFAULT 'active',
+      created_at  TEXT    NOT NULL DEFAULT (datetime('now')),
+      last_login  TEXT
+    )`),
     db.prepare(`CREATE TABLE IF NOT EXISTS vehicles (
       id          INTEGER PRIMARY KEY AUTOINCREMENT,
       name        TEXT    NOT NULL,
@@ -26,6 +37,7 @@ export async function initDB(db: D1Database): Promise<void> {
       note        TEXT,
       vehicle_id  INTEGER,
       deleted_at  TEXT,
+      user_id     INTEGER,
       created_at  TEXT    NOT NULL DEFAULT (datetime('now'))
     )`),
     db.prepare(`CREATE TABLE IF NOT EXISTS mileage_records (
@@ -34,6 +46,7 @@ export async function initDB(db: D1Database): Promise<void> {
       odometer    REAL    NOT NULL,
       note        TEXT,
       vehicle_id  INTEGER,
+      user_id     INTEGER,
       created_at  TEXT    NOT NULL DEFAULT (datetime('now'))
     )`),
     db.prepare(`CREATE TABLE IF NOT EXISTS maintenance_records (
@@ -45,6 +58,7 @@ export async function initDB(db: D1Database): Promise<void> {
       note        TEXT,
       vehicle_id  INTEGER,
       deleted_at  TEXT,
+      user_id     INTEGER,
       created_at  TEXT    NOT NULL DEFAULT (datetime('now'))
     )`),
     db.prepare(`CREATE TABLE IF NOT EXISTS reminders (
@@ -57,6 +71,7 @@ export async function initDB(db: D1Database): Promise<void> {
       interval_km      REAL,
       note             TEXT,
       chat_id          TEXT,
+      user_id          INTEGER,
       status           TEXT    NOT NULL DEFAULT 'active',
       fired_at         TEXT,
       created_at       TEXT    NOT NULL DEFAULT (datetime('now'))
@@ -81,6 +96,7 @@ export async function clearDB(db: D1Database): Promise<void> {
     db.prepare('DELETE FROM maintenance_records'),
     db.prepare('DELETE FROM reminders'),
     db.prepare('DELETE FROM vehicles'),
+    db.prepare('DELETE FROM users'),
     db.prepare('DELETE FROM knowledge_chunks'),
   ]);
 }
