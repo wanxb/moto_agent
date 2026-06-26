@@ -4,7 +4,7 @@
 import type { Tool } from './interface';
 import type { Lang } from '../i18n/types';
 import { t, fmtNumber, fmtPricePerL } from '../i18n';
-import { resolveVehicle, ambiguousMsg, fmtKm, fmtCost } from './_helpers';
+import { resolveVehicle, ambiguousMsg, fmtKm, fmtCost, validateDateNotFuture } from './_helpers';
 import {
   insertFuelRecord, getLastFuelRecord, getRecentFuelRecords, getFuelRecordsByDateRange,
   updateFuelRecord, softDeleteFuelRecord, findFuelRecords,
@@ -42,6 +42,10 @@ export class LogFuelTool implements Tool {
 
     const vehicleId = r.status === 'resolved' ? r.vehicle.id : undefined;
     const vehicleName = r.status === 'resolved' ? r.vehicle.name : undefined;
+
+    // 未来日期拦截：不允许录入明天及以后的记录（补录/提前录入均拒绝）
+    const dateErr = validateDateNotFuture(date, lang);
+    if (dateErr) return dateErr;
 
     // spec 011: 未提油号时，用车辆默认油号；车辆无默认则 fallback 到 95
     if (!fuel_type && r.status === 'resolved' && r.vehicle.fuel_type) {

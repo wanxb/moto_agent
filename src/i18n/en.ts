@@ -9,6 +9,7 @@ export const en: Record<string, string> = {
   'general.no_fuel_records_edit': 'No fuel records to edit.',
   'general.no_fuel_records_delete': 'No fuel records to delete.',
   'general.fallback_error': 'Something went wrong. Please try again later.',
+  'general.future_date': "Date {0} hasn't arrived yet (today is {1}). Can't record future events — please double-check the date.",
   'general.unknown_tool': 'Unknown tool: {0}',
   'general.no_reply': '(No reply)',
   'general.timeout': 'Request timed out. Please try again.',

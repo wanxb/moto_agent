@@ -32,6 +32,13 @@ export function ambiguousMsg(vehicles: Vehicle[], verb: string, lang: Lang): str
   return t('ambiguous.msg', lang, verb, vehicles.map(v => v.name).join('、'));
 }
 
+/** 校验 date 不能超过今天（杜绝未来日期录入）。today 可注入便于测试。 */
+export function validateDateNotFuture(date: string, lang: Lang, today?: string): string | null {
+  const now = today ?? new Date().toISOString().slice(0, 10);  // YYYY-MM-DD
+  if (date > now) return t('general.future_date', lang, date, now);
+  return null;
+}
+
 // ── 显示格式化 ───────────────────────────────────────────────────────────────
 
 export { fmtKm, fmtCost };

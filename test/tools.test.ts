@@ -269,3 +269,45 @@ describe('delete_last_fuel / delete_fuel (spec 017)', () => {
     expect(result).toContain('没有找到');
   });
 });
+
+// ── 未来日期拦截 ───────────────────────────────────────────────────────────────
+
+const tomorrow = (): string => {
+  const d = new Date(Date.now() + 86400000);
+  return d.toISOString().slice(0, 10);
+};
+const yesterday = (): string => {
+  const d = new Date(Date.now() - 86400000);
+  return d.toISOString().slice(0, 10);
+};
+
+describe('future date validation', () => {
+  it('log_fuel rejects tomorrow', async () => {
+    const result = await dispatchTool('log_fuel', {
+      date: tomorrow(), odometer: 10000, liters: 10, price_total: 98,
+    }, env.DB);
+    expect(result).toContain('还没到');
+  });
+
+  it('log_fuel accepts yesterday (补录)', async () => {
+    const result = await dispatchTool('log_fuel', {
+      date: yesterday(), odometer: 10000, liters: 10, price_total: 98,
+    }, env.DB);
+    expect(result).not.toContain('还没到');
+    expect(result).toContain('⛽');
+  });
+
+  it('log_maintenance rejects future date', async () => {
+    const result = await dispatchTool('log_maintenance', {
+      date: tomorrow(), type: '机油', odometer: 10000,
+    }, env.DB);
+    expect(result).toContain('还没到');
+  });
+
+  it('log_mileage rejects future date', async () => {
+    const result = await dispatchTool('log_mileage', {
+      date: tomorrow(), odometer: 10000,
+    }, env.DB);
+    expect(result).toContain('还没到');
+  });
+});

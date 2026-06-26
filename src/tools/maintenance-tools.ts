@@ -3,7 +3,7 @@
 import type { Tool } from './interface';
 import type { Lang } from '../i18n/types';
 import { t } from '../i18n';
-import { resolveVehicle, ambiguousMsg, fmtKm, fmtCost } from './_helpers';
+import { resolveVehicle, ambiguousMsg, fmtKm, fmtCost, validateDateNotFuture } from './_helpers';
 import {
   insertMaintenanceRecord, getMaintenanceRecords, getLastMaintenanceByType,
   findMaintenanceRecords, softDeleteMaintenanceRecord,
@@ -44,6 +44,10 @@ export class LogMaintenanceTool implements Tool {
 
     const vehicleId = r.status === 'resolved' ? r.vehicle.id : undefined;
     const vehicleName = r.status === 'resolved' ? r.vehicle.name : undefined;
+
+    // 未来日期拦截：不允许录入明天及以后的记录
+    const dateErr = validateDateNotFuture(date, lang);
+    if (dateErr) return dateErr;
 
     // spec 017: 写入前去重软拦截——同车同类型且日期相近视为疑似重复，未确认则先反问不落库
     if (confirm !== true) {

@@ -3,7 +3,7 @@
 import type { Tool } from './interface';
 import type { Lang } from '../i18n/types';
 import { t, fmtNumber } from '../i18n';
-import { resolveVehicle, ambiguousMsg } from './_helpers';
+import { resolveVehicle, ambiguousMsg, validateDateNotFuture } from './_helpers';
 import { insertMileageRecord, getLastFuelRecord } from '../database';
 
 export class LogMileageTool implements Tool {
@@ -28,6 +28,10 @@ export class LogMileageTool implements Tool {
 
     const vehicleId = r.status === 'resolved' ? r.vehicle.id : undefined;
     const vehicleName = r.status === 'resolved' ? r.vehicle.name : undefined;
+
+    // 未来日期拦截：不允许录入明天及以后的记录
+    const dateErr = validateDateNotFuture(date, lang);
+    if (dateErr) return dateErr;
 
     await insertMileageRecord(db, { date, odometer, note, vehicle_id: vehicleId, user_id: userId });
     const tag = vehicleName ? t('fuel.vehicle_tag', lang, vehicleName) : '';

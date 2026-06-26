@@ -9,6 +9,7 @@ export const zh: Record<string, string> = {
   'general.no_fuel_records_edit': '没有可修改的加油记录。',
   'general.no_fuel_records_delete': '没有可删除的加油记录。',
   'general.fallback_error': '出错了，请稍后重试。',
+  'general.future_date': '日期 {0} 还没到（今天 {1}），不能录将来的记录。如果是补录请确认日期无误。',
   'general.unknown_tool': '未知工具：{0}',
   'general.no_reply': '（无回复）',
   'general.timeout': '处理超时，请重试。',
