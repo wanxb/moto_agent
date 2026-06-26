@@ -5,7 +5,7 @@
 import type { Env } from '../types';
 import type { Lang } from '../i18n/types';
 import { t, getLang } from '../i18n';
-import { MAGIC_LINK_TTL } from '../config';
+import { MAGIC_LINK_TTL, GOOGLE_OAUTH_STATE_TTL } from '../config';
 import { pushPwaNotice } from './chat-api';
 import { checkRateLimit, RULES } from '../gateway/rate-limiter';
 import { sendMagicLinkEmail } from '../services/mail';
@@ -51,6 +51,8 @@ export async function handleAuthRequest(request: Request, env: Env): Promise<Res
   if (pathname === '/auth/bind'      && m === 'GET')  return bindPage(request, env);
   if (pathname === '/auth/bind'      && m === 'POST') return bindConsume(request, env);
   if (pathname === '/auth/auto-login' && m === 'GET') return autoLogin(request, env);
+  if (pathname === '/auth/google'           && m === 'GET') return googleLogin(request, env);
+  if (pathname === '/auth/google/callback'  && m === 'GET') return googleCallback(request, env);
   return json(404, { error: 'not_found' });
 }
 
@@ -226,6 +228,128 @@ async function autoLogin(request: Request, env: Env): Promise<Response> {
   });
 }
 
+// ── GET /auth/google —— 发起 Google OAuth Authorization Code Flow ──────────
+
+async function googleLogin(request: Request, env: Env): Promise<Response> {
+  if (!env.GOOGLE_CLIENT_ID) {
+    return html(500, page('未配置', 'Google 登录尚未配置。请联系管理员设置 GOOGLE_CLIENT_ID。'));
+  }
+  const state = crypto.randomUUID();
+  await env.SESSION_KV.put(
+    `oauth_state:${state}`,
+    JSON.stringify({ expiresAt: nowSec() + GOOGLE_OAUTH_STATE_TTL }),
+    { expirationTtl: GOOGLE_OAUTH_STATE_TTL },
+  );
+
+  const redirectUri = `${baseUrl(request, env)}/auth/google/callback`;
+  const params = new URLSearchParams({
+    client_id: env.GOOGLE_CLIENT_ID,
+    redirect_uri: redirectUri,
+    response_type: 'code',
+    scope: 'openid email profile',
+    state,
+    access_type: 'online',
+  });
+  return new Response(null, {
+    status: 302,
+    headers: { Location: `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}` },
+  });
+}
+
+// ── GET /auth/google/callback —— OAuth 回调：换 token → 拿 email → 建 session ─
+
+async function googleCallback(request: Request, env: Env): Promise<Response> {
+  const url = new URL(request.url);
+  const code = url.searchParams.get('code') || '';
+  const state = url.searchParams.get('state') || '';
+
+  // 1. 校验 state（CSRF 防护）
+  if (!state) return html(403, page('请求无效', '缺少 state 参数，登录请求不合法。'));
+  const stateRaw = await env.SESSION_KV.get(`oauth_state:${state}`);
+  if (!stateRaw) return html(403, page('链接已失效', '登录会话已过期，请回到登录页重新开始。'));
+  await env.SESSION_KV.delete(`oauth_state:${state}`);  // 一次性消费
+
+  const stateRec = JSON.parse(stateRaw) as { expiresAt: number };
+  if (nowSec() >= stateRec.expiresAt) {
+    return html(403, page('链接已失效', '登录会话已过期，请回到登录页重新开始。'));
+  }
+
+  if (!code) {
+    const errorDesc = url.searchParams.get('error_description') || url.searchParams.get('error') || '用户取消了授权';
+    return html(403, page('授权失败', `Google 授权失败：${escapeHtml(errorDesc)}`));
+  }
+
+  // 2. 交换 code → tokens
+  if (!env.GOOGLE_CLIENT_ID || !env.GOOGLE_CLIENT_SECRET) {
+    return html(500, page('未配置', 'Google 登录尚未配置。'));
+  }
+
+  const redirectUri = `${baseUrl(request, env)}/auth/google/callback`;
+  let tokenRes: Response;
+  try {
+    tokenRes = await fetch('https://oauth2.googleapis.com/token', {
+      method: 'POST',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        code,
+        client_id: env.GOOGLE_CLIENT_ID,
+        client_secret: env.GOOGLE_CLIENT_SECRET,
+        redirect_uri: redirectUri,
+        grant_type: 'authorization_code',
+      }).toString(),
+    });
+  } catch (e) {
+    return html(502, page('服务异常', '无法连接 Google 服务，请稍后重试。'));
+  }
+
+  if (!tokenRes.ok) {
+    const errText = await tokenRes.text().catch(() => '');
+    console.error('[auth] google token exchange failed:', tokenRes.status, errText);
+    return html(502, page('授权失败', 'Google 授权校验失败，请回到登录页重试。'));
+  }
+
+  const tokenData = await tokenRes.json() as { id_token?: string; access_token?: string };
+  const idToken = tokenData.id_token;
+  if (!idToken) {
+    return html(502, page('授权失败', 'Google 未返回身份令牌，请重试。'));
+  }
+
+  // 3. 解析 id_token JWT（不经签名验证——token 来自 Google HTTPS server-to-server 回包）
+  const payload = parseJwtPayload(idToken);
+  if (!payload) {
+    return html(502, page('授权失败', '无法解析 Google 身份令牌。'));
+  }
+
+  // 验 aud（确保 token 是发给我们的）
+  if (payload.aud !== env.GOOGLE_CLIENT_ID) {
+    console.error('[auth] google id_token aud mismatch:', payload.aud, '!=', env.GOOGLE_CLIENT_ID);
+    return html(403, page('授权失败', '身份令牌 audience 不匹配。'));
+  }
+
+  const email = (payload.email || '').trim().toLowerCase();
+  if (!EMAIL_RE.test(email) || !payload.email_verified) {
+    return html(403, page('授权失败', 'Google 账号邮箱未验证，无法登录。'));
+  }
+
+  const name = typeof payload.name === 'string' ? payload.name : undefined;
+
+  // 4. Find-or-create user（按 email，与 Magic Link 共用用户模型）
+  let user = await getUserByEmail(env.DB, email);
+  if (!user) {
+    const id = await createUser(env.DB, { email, nickname: name });
+    user = await getUserById(env.DB, id);
+  }
+  if (!user) return html(500, page('登录失败', '账号创建异常，请稍后重试。'));
+
+  await updateUserLastLogin(env.DB, user.id, new Date().toISOString());
+  const sToken = await createSession(env.SESSION_KV, { user_id: user.id, email: user.email });
+
+  return new Response(null, {
+    status: 302,
+    headers: { Location: `${baseUrl(request, env)}/chat`, 'Set-Cookie': buildSessionCookie(sToken) },
+  });
+}
+
 // ── helpers ───────────────────────────────────────────────────────────────────
 
 /** 读 magic_link 并做防御性过期校验（KV TTL 之外再查一道）。不删除。 */
@@ -250,6 +374,20 @@ async function readBindLink(env: Env, token: string): Promise<{ email: string; t
 
 function escapeHtml(s: string): string {
   return s.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!));
+}
+
+/** 解析 JWT payload（中间段 base64url decode → JSON），不验签名（token 来自 Google HTTPS server-to-server 回包） */
+function parseJwtPayload(jwt: string): { aud?: string; email?: string; email_verified?: boolean; name?: string } | null {
+  try {
+    const parts = jwt.split('.');
+    if (parts.length < 2) return null;
+    // base64url → base64 → decode
+    const base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+    const json = atob(base64);
+    return JSON.parse(json);
+  } catch {
+    return null;
+  }
 }
 
 const STYLE = `<style>

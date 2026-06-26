@@ -48,3 +48,5 @@ WORKER_ORIGIN = "https://moto.bbing.xyz"
 #   ALLOWED_CHAT_ID
 #   DASHBOARD_URL
 #   RESEND_API_KEY
+#   GOOGLE_CLIENT_ID      (spec 018 Google OAuth)
+#   GOOGLE_CLIENT_SECRET  (spec 018 Google OAuth)

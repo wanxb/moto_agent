@@ -38,6 +38,8 @@ const dict: Record<Lang, Record<string, string>> = {
     sent: '邮件已发送，请检查收件箱 ✉️',
     bad_email: '邮箱格式不对',
     send_failed: '发送失败，请稍后重试',
+    or: '或者',
+    google_login: 'Google 账号登录',
   },
   en: {
     title: 'Moto Bot',
@@ -74,6 +76,8 @@ const dict: Record<Lang, Record<string, string>> = {
     sent: 'Email sent — check your inbox ✉️',
     bad_email: 'Invalid email',
     send_failed: 'Failed to send, please retry',
+    or: 'or',
+    google_login: 'Sign in with Google',
   },
 };
 

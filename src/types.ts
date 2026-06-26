@@ -14,6 +14,8 @@ export interface Env {
   SENDER_EMAIL?: string;    // spec 016 发件地址，须属于 Resend 已验证域名
   ASSETS?: Fetcher;         // spec 016 静态资源绑定（web/ SPA，ADR-0010）；测试环境未绑定
   WORKER_ORIGIN?: string;   // spec 016 Worker 直连域名（auto-login / dashboard 链接用，确保 KV 一致性）
+  GOOGLE_CLIENT_ID?: string;     // spec 018 Google OAuth Client ID（wrangler secret put）
+  GOOGLE_CLIENT_SECRET?: string; // spec 018 Google OAuth Client Secret（wrangler secret put）
 }
 
 // OpenAI-compatible message format (used internally and for DeepSeek)

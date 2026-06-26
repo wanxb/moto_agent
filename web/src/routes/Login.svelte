@@ -37,6 +37,10 @@
       </button>
       {#if status === 'error'}<p class="err">{tr(lang, 'send_failed')}</p>{/if}
     </form>
+    <div class="sep"><span>{tr(lang, 'or')}</span></div>
+    <button class="google" onclick={() => { location.href = '/auth/google'; }}>
+      🅶 {tr(lang, 'google_login')}
+    </button>
     <p class="hint">✉️ {tr(lang, 'login_hint')}</p>
   {/if}
 </main>
@@ -56,6 +60,12 @@
   }
   button:disabled { opacity: 0.6; }
   .hint { color: var(--muted); font-size: 0.85rem; margin-top: 18px; line-height: 1.5; }
+  .sep { display: flex; align-items: center; margin: 14px 0; }
+  .sep::before, .sep::after { content: ''; flex: 1; border-top: 1px solid var(--border); }
+  .sep span { padding: 0 12px; color: var(--muted); font-size: 0.8rem; }
+  .google { width: 100%; padding: 13px; border: 1px solid var(--border); border-radius: 10px;
+    background: #4285f4; color: #fff; font-size: 1rem; font-weight: 500; cursor: pointer; }
+  .google:hover { background: #3367d6; }
   .ok { color: var(--green); margin-top: 24px; font-size: 1rem; }
   .err { color: var(--red); font-size: 0.85rem; }
 </style>
