@@ -138,11 +138,12 @@
 
 ### T10 仪表盘适配（API 鉴权 + 迁移边界）
 
-- [ ] **T10.1** 修改 `src/routes/api.ts`：`/api/v1/*` 支持 session cookie 鉴权（`resolveSession`）+ 旧 `?token=` 兼容（30 天过渡）+ 所有查询加 `user_id` 过滤；新增 `GET /api/v1/me`（返回当前用户/绑定态）
-- [ ] **T10.2** 仪表盘迁移边界（design §4.5）：
-  - **本期**：`Dashboard.svelte` 先以外链/`<iframe>` 指向现有 `/dashboard`（`dashboard-html.ts` 暂留可用）；SPA 顶栏/快捷面板能跳过去
-  - **后续**：图表迁入 `Dashboard.svelte` 消费 `/api/v1/*`，删 `dashboard-html.ts`
-  - 验证：PWA 登录后能进仪表盘看本人数据；旧 `?token=` 仍可看管理员数据
+- [x] **T10.1** 修改 `src/routes/api.ts`：`/api/v1/*` 支持 session cookie 鉴权（`resolveApiUser`）+ 旧 `?token=` 兼容（30 天过渡）+ 所有查询加 `user_id` 过滤；`GET /api/v1/me` 已建（T4），本期加 `POST /api/v1/me {lang}`（T8）
+- [x] **T10.2** 仪表盘**一步迁入 SPA**（用户拍板跳过 iframe 过渡）：
+  - `web/src/routes/Dashboard.svelte` 消费 `/api/v1/*`：车辆 tabs + 天数筛选 + 汇总卡片 + Chart.js(npm 打包) 图表 + 加油/维保/提醒三段分页 + 双语
+  - SPA 路由 `/dashboard` 接管；移除 Worker `GET /dashboard → dashboardPage`；**删除 `src/routes/dashboard-html.ts`**（612 行）
+  - Chart.js 改 **npm 依赖**（不再 CDN 动态加载，防墙）；bundle gzip ~22KB→~97KB
+  - 验证：PWA 登录后进 `/dashboard` 看本人数据；`?token=` API 仍可看管理员数据（旧 HTML 页已不存在）
 
 ### T10B cron 多用户化 — scheduled.ts
 

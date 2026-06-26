@@ -89,13 +89,5 @@ describe('token auth', () => {
   });
 });
 
-describe('/dashboard', () => {
-  it('returns HTML page', async () => {
-    const res = await SELF.fetch('http://localhost/dashboard');
-    expect(res.status).toBe(200);
-    const html = await res.text();
-    expect(html).toContain('<!DOCTYPE html>');
-    expect(html).toContain('Moto Agent');
-    expect(html).toContain('chart.js@');
-  });
-});
+// 注：旧的 GET /dashboard 服务端 HTML 已迁入 web/ SPA（Dashboard.svelte，经 [assets] 提供），
+// 测试池无 ASSETS 绑定，故此处不再测 HTML 页面；仪表盘数据端点见上方 /api/v1/* 用例。

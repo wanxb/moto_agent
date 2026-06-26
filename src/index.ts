@@ -11,7 +11,6 @@ import { MAX_VOICE_SECONDS, BIND_CODE_TTL } from './config';
 import { handleApiRequest } from './routes/api';
 import { handleAuthRequest } from './routes/auth-handler';
 import { handleChatRequest } from './routes/chat-api';
-import { dashboardPage } from './routes/dashboard-html';
 import { checkRateLimit, RULES } from './gateway/rate-limiter';
 import { sendBindCodeEmail } from './services/mail';
 import { getUserByEmail } from './database';
@@ -204,12 +203,7 @@ export default {
         }
       }
 
-      // ── Dashboard HTML ────────────────────────────────────────────────────
-      if (url.pathname === '/dashboard' || url.pathname === '/dashboard/') {
-        const token = env.ALLOWED_CHAT_ID || '';
-        const lang = url.searchParams.get('lang') || undefined;
-        return new Response(dashboardPage(token, lang), { status: 200, headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store, max-age=0' } });
-      }
+      // Dashboard 已迁入 web/ SPA（Dashboard.svelte），由下方 [assets] 在 /dashboard 提供。
 
       // ── Debug ping ─────────────────────────────────────────────────────────
       if (url.pathname === '/ping') {
