@@ -1,11 +1,12 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { getLang, tr } from '../lib/i18n';
-  import { apiJson, postJson } from '../lib/api';
+  import { apiJson, postJson, postForm } from '../lib/api';
   import { getMe } from '../lib/session';
   import TopBar from '../components/TopBar.svelte';
   import Bubble from '../components/Bubble.svelte';
   import QuickPanel from '../components/QuickPanel.svelte';
+  import Recorder from '../components/Recorder.svelte';
 
   type Msg = { role: string; content: string };
 
@@ -13,6 +14,7 @@
   let messages = $state<Msg[]>([]);
   let input = $state('');
   let sending = $state(false);
+  let busyLabel = $state('');     // 等待时占位气泡文案（思考中 / 识别中）
   let ready = $state(false);
   let listEl = $state<HTMLDivElement | undefined>();
 
@@ -37,6 +39,7 @@
     input = '';
     messages = [...messages, { role: 'user', content: text }];
     sending = true;
+    busyLabel = tr(lang, 'thinking');
     scrollDown();
     try {
       const res = await postJson('/chat/api', { text });
@@ -46,6 +49,30 @@
       messages = [...messages, { role: 'assistant', content: '⚠️ ' + tr(lang, 'error') }];
     } finally {
       sending = false;
+      busyLabel = '';
+      scrollDown();
+    }
+  }
+
+  // 语音：Recorder 录完把 Blob 交来 → 上传 /chat/voice → 渲染识别文字 + Bot 回复。
+  async function sendVoice(blob: Blob) {
+    if (sending) return;
+    sending = true;
+    busyLabel = tr(lang, 'transcribing');
+    scrollDown();
+    try {
+      const form = new FormData();
+      form.append('audio', blob, 'voice.webm');
+      const res = await postForm('/chat/voice', form);
+      const data = (await res.json()) as { text?: string; reply?: string };
+      if (!res.ok) throw new Error('voice');
+      if (data.text) messages = [...messages, { role: 'user', content: data.text }];
+      messages = [...messages, { role: 'assistant', content: data.reply ?? '…' }];
+    } catch {
+      messages = [...messages, { role: 'assistant', content: '⚠️ ' + tr(lang, 'voice_failed') }];
+    } finally {
+      sending = false;
+      busyLabel = '';
       scrollDown();
     }
   }
@@ -73,13 +100,14 @@
       <Bubble role={m.role} content={m.content} />
     {/each}
     {#if sending}
-      <Bubble role="assistant" content={tr(lang, 'thinking')} />
+      <Bubble role="assistant" content={busyLabel || tr(lang, 'thinking')} />
     {/if}
   </div>
 
   <QuickPanel items={quick} />
 
   <div class="inputbar">
+    <Recorder {lang} busy={sending} onAudio={sendVoice} />
     <textarea rows="1" placeholder={tr(lang, 'input_ph')} bind:value={input} onkeydown={onKey}></textarea>
     <button class="send" onclick={send} disabled={sending || !input.trim()}>{tr(lang, 'send')}</button>
   </div>

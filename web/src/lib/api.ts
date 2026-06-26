@@ -21,3 +21,8 @@ export function postJson(path: string, body: unknown): Promise<Response> {
     body: JSON.stringify(body),
   });
 }
+
+// 上传 multipart（语音等）：不设 content-type，由浏览器带 boundary。
+export function postForm(path: string, form: FormData): Promise<Response> {
+  return apiFetch(path, { method: 'POST', body: form });
+}
