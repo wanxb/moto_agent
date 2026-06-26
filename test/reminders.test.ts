@@ -4,6 +4,7 @@ import { dispatchTool } from '../src/tools';
 import {
   insertVehicle, insertFuelRecord, insertMileageRecord,
   insertReminder, getActiveReminders, getLatestOdometer, listRemindersByVehicle,
+  createUser,
 } from '../src/database';
 import { findDueReminders, formatReminder, runScheduled } from '../src/scheduled';
 import { initDB, clearDB, makeEnv } from './utils';
@@ -251,6 +252,70 @@ describe('runScheduled', () => {
     const e = makeEnv(env.DB, env.SESSION_KV);
     await runScheduled(e, { today: '2026-06-10', send: async () => {} });
     expect(await getActiveReminders(env.DB)).toHaveLength(0);   // 一次性，无续期
+  });
+});
+
+// ── 多用户 cron 推送（spec 016 T10B）─────────────────────────────────────────────
+
+describe('runScheduled multi-user (T10B)', () => {
+  it('推送到属主 telegram_id，文案随属主 lang（en）', async () => {
+    const owner = await createUser(env.DB, { telegramId: '555', lang: 'en' });
+    // 无 chat_id 的日期提醒，归属该用户
+    await insertReminder(env.DB, { type: 'Insurance', mode: 'date', trigger_date: '2026-01-01', user_id: owner });
+
+    const sent: Array<{ chatId: string; text: string }> = [];
+    const e = makeEnv(env.DB, env.SESSION_KV);
+    const r = await runScheduled(e, { today: '2026-06-10', send: async (chatId, text) => { sent.push({ chatId, text }); } });
+
+    expect(r.fired).toBe(1);
+    expect(sent[0].chatId).toBe('555');                 // 回退到属主 telegram_id，非 ALLOWED_CHAT_ID
+    expect(sent[0].text).toContain('Reminder');         // 英文文案
+    expect(sent[0].text).toContain('due:');
+  });
+
+  it('纯 PWA 属主（未绑 TG、无 chat_id）→ 跳过，不误推给管理员', async () => {
+    const owner = await createUser(env.DB, { email: 'pwa@x.com' });   // 无 telegram_id
+    await insertReminder(env.DB, { type: '保险', mode: 'date', trigger_date: '2026-01-01', user_id: owner });
+
+    const sent: string[] = [];
+    const e = makeEnv(env.DB, env.SESSION_KV);                        // ALLOWED_CHAT_ID=999999
+    const r = await runScheduled(e, { today: '2026-06-10', send: async (chatId) => { sent.push(chatId); } });
+
+    expect(r.fired).toBe(0);
+    expect(sent).toHaveLength(0);                        // 没推给 999999
+    expect(await getActiveReminders(env.DB)).toHaveLength(1);   // 仍 active
+  });
+
+  it('chat_id 优先于属主 telegram_id', async () => {
+    const owner = await createUser(env.DB, { telegramId: '555' });
+    await insertReminder(env.DB, { type: '机油', mode: 'date', trigger_date: '2026-01-01', user_id: owner, chat_id: '777' });
+
+    const sent: string[] = [];
+    const e = makeEnv(env.DB, env.SESSION_KV);
+    await runScheduled(e, { today: '2026-06-10', send: async (chatId) => { sent.push(chatId); } });
+    expect(sent[0]).toBe('777');                         // 显式 chat_id 赢
+  });
+});
+
+// ── formatReminder 英文 ───────────────────────────────────────────────────────
+
+describe('formatReminder (en)', () => {
+  it('renders English mileage + date messages', () => {
+    const mileage = formatReminder({
+      id: 1, vehicle_id: 1, type: 'Oil', mode: 'mileage', trigger_odometer: 13000,
+      trigger_date: null, interval_km: 3000, note: null, chat_id: null, user_id: null, status: 'active', fired_at: null,
+      created_at: '', vehicle_name: 'Greenie', current_odometer: 13050,
+    }, 16000, 'en');
+    expect(mileage).toContain('Time for "Oil"');
+    expect(mileage).toContain('Auto-renewed');
+    expect(mileage).toContain('16,000 km');
+
+    const date = formatReminder({
+      id: 2, vehicle_id: null, type: 'Insurance', mode: 'date', trigger_odometer: null,
+      trigger_date: '2027-01-05', interval_km: null, note: null, chat_id: null, user_id: null, status: 'active', fired_at: null,
+      created_at: '', vehicle_name: null,
+    }, null, 'en');
+    expect(date).toContain('Insurance due: 2027-01-05');
   });
 });
 

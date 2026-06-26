@@ -115,6 +115,12 @@ export const en: Record<string, string> = {
   'reminder.cancelled': '✅ Cancelled "{0}" reminder ({1} items).',
   'reminder.cancel_not_found': 'No active "{0}" reminders found.',
 
+  // ── Cron due-reminder push (spec 016 T10B: per owner's language) ──
+  'cron.tag': ' ({0})',
+  'cron.mileage_msg': '🔔 Maintenance reminder{0}\nTime for "{1}": current {2} km ≥ target {3} km{4}',
+  'cron.renew': '\nAuto-renewed — next reminder at {0} km',
+  'cron.date_msg': '🔔 Reminder{0}\n{1} due: {2}',
+
   // ── Cron push ──
   'cron.mileage': '🔔 Maintenance Reminder{0}\nTime to handle "{1}": current {2} ≥ trigger {3} km{4}',
   'cron.date': '🔔 Reminder{0}\n{1} is due: {2}',

@@ -146,10 +146,10 @@
 
 ### T10B cron 多用户化 — scheduled.ts
 
-- [ ] **T10B.1** 改造 `src/scheduled.ts`：到期提醒推送目标 = `reminders.chat_id` → 回退该 reminder 属主 `users.telegram_id` → 回退 `ALLOWED_CHAT_ID`
-- [ ] **T10B.2** 文案按属主 `users.lang`（经 `reminders.user_id → users.lang`）选 zh/en，去掉硬编码中文
-- [ ] **T10B.3** 自动续期写回的新 reminder 继承原 `user_id` 与 `chat_id`；未绑 TG 的纯 PWA 用户暂不推送
-  - 验证：多用户各有到期项 → 各按自己 chat_id/lang 收到，不串号
+- [x] **T10B.1** 改造 `src/scheduled.ts`：推送目标 = `reminders.chat_id` → 属主 `users.telegram_id` → **仅无属主的历史提醒**才回退 `ALLOWED_CHAT_ID`（有属主的绝不回退到管理员，防串号）
+- [x] **T10B.2** 文案按属主 `users.lang`（`reminders.user_id → users.lang`）选 zh/en，`formatReminder` 全部走 `cron.*` i18n 键，去掉硬编码中文（lang 作末位参数，兼容历史位置调用）
+- [x] **T10B.3** 自动续期写回的新 reminder 继承原 `user_id` + `chat_id`；纯 PWA 属主（有 user_id、未绑 TG、无 chat_id）→ 跳过不推送
+  - 验证：26 个 reminders 测试通过，含 en 文案 / telegram_id 回退 / 纯 PWA 跳过 / chat_id 优先 四个新用例
 
 ### T11 存量数据迁移脚本
 

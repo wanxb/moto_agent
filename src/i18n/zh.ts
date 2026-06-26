@@ -115,6 +115,12 @@ export const zh: Record<string, string> = {
   'reminder.cancelled': '✅ 已取消「{0}」提醒（{1} 条）。',
   'reminder.cancel_not_found': '没有找到活跃的「{0}」提醒。',
 
+  // ── Cron 到期推送（spec 016 T10B：按属主语言）──
+  'cron.tag': '（{0}）',
+  'cron.mileage_msg': '🔔 保养提醒{0}\n该处理「{1}」了：当前 {2} km ≥ 提醒里程 {3} km{4}',
+  'cron.renew': '\n已自动续期，下次 {0} km 提醒',
+  'cron.date_msg': '🔔 提醒{0}\n{1} 到期：{2}',
+
   // ── Cron 推送 ──
   'cron.mileage': '🔔 保养提醒{0}\n该处理「{1}」了：当前 {2} ≥ 提醒里程 {3} km{4}',
   'cron.date': '🔔 提醒{0}\n{1} 到期：{2}',
