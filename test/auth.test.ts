@@ -4,7 +4,7 @@ import worker from '../src/index';
 import { handleAuthRequest } from '../src/routes/auth-handler';
 import { getSession, createSession, parseSessionToken } from '../src/services/session';
 import {
-  getUserByEmail, getUserById, createUser,
+  getUserByEmail, getUserByTelegramId, getUserById, createUser,
   insertFuelRecord, getRecentFuelRecords,
 } from '../src/database';
 import type { Env } from '../src/types';
@@ -217,5 +217,25 @@ describe('worker routing (index.ts)', () => {
   it('legacy dashboard ?token= still works', async () => {
     const res = await worker.fetch!(new Request(`https://test.dev/api/v1/vehicles?token=${E.ALLOWED_CHAT_ID}`), E);
     expect(res.status).toBe(200);
+  });
+
+  it('GET /auth/auto-login → creates session → 302 /dashboard', async () => {
+    const now = Math.floor(Date.now() / 1000) + 300;
+    await env.SESSION_KV.put('auto_login:tok1', JSON.stringify({ telegram_id: '555', expiresAt: now }));
+
+    const res = await worker.fetch!(new Request('https://test.dev/auth/auto-login?t=tok1'), E);
+    expect(res.status).toBe(302);
+    expect(res.headers.get('Location')).toBe('https://test.dev/dashboard');
+    expect(res.headers.get('Set-Cookie')).toContain('session_token=');
+
+    // token 已消费
+    expect(await env.SESSION_KV.get('auto_login:tok1')).toBeNull();
+    // 用户已创建（TG 开放自助）
+    expect(await getUserByTelegramId(env.DB, '555')).not.toBeNull();
+  });
+
+  it('GET /auth/auto-login invalid/expired token → 410', async () => {
+    const res = await worker.fetch!(new Request('https://test.dev/auth/auto-login?t=nope'), E);
+    expect(res.status).toBe(410);
   });
 });

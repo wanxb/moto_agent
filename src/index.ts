@@ -82,15 +82,23 @@ function createBot(env: Env): Bot {
   });
 
   bot.command('dashboard', async ctx => {
-    const url = env.DASHBOARD_URL;
-    if (!url) {
+    const origin = siteOrigin(env);
+    if (!origin) {
       const lang = await resolveLang(env, ctx.chat!.id.toString(), ctx.from?.language_code);
       return ctx.reply(t('dashboard.no_url', lang));
     }
-    const lang = await resolveLang(env, ctx.chat!.id.toString(), ctx.from?.language_code);
-    // 将用户语言偏好以 ?lang= 参数传给 Dashboard HTML
-    const langParam = lang === 'en' ? '?lang=en' : '';
-    const link = url.includes('?') ? `${url}&lang=${lang}` : `${url}${langParam}`;
+    const chatId = ctx.chat.id.toString();
+    const lang = await resolveLang(env, chatId, ctx.from?.language_code);
+
+    // 生成一次性 auto-login token：用户从 TG 点链接 → 自动登录 → 直接进看板
+    const token = crypto.randomUUID();
+    const expiresAt = Math.floor(Date.now() / 1000) + 300;  // 5 分钟
+    await env.SESSION_KV.put(
+      `auto_login:${token}`,
+      JSON.stringify({ telegram_id: chatId, expiresAt }),
+      { expirationTtl: 300 },
+    );
+    const link = `${origin}/auth/auto-login?t=${token}`;
     return ctx.reply(t('dashboard.link', lang, link), { parse_mode: 'HTML' });
   });
 
