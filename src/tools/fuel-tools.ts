@@ -7,9 +7,10 @@ import { t, fmtNumber, fmtPricePerL } from '../i18n';
 import { resolveVehicle, ambiguousMsg, fmtKm, fmtCost } from './_helpers';
 import {
   insertFuelRecord, getLastFuelRecord, getRecentFuelRecords, getFuelRecordsByDateRange,
-  updateFuelRecord, softDeleteFuelRecord,
+  updateFuelRecord, softDeleteFuelRecord, findFuelRecords,
   getVehicleMostUsedFuelType, updateVehicle,
 } from '../database';
+import { FUEL_DUP_KM_THRESHOLD } from '../config';
 
 // ── log_fuel ──────────────────────────────────────────────────────────────────
 
@@ -25,13 +26,14 @@ export class LogFuelTool implements Tool {
     fuel_type:   { type: 'string', enum: ['92', '95', '98'], description: '油品标号，默认 95' },
     note:        { type: 'string', description: '备注（可选）' },
     vehicle:     { type: 'string', description: '车辆名称（可选）。用户提到车名时传入；未提到则不传，记到默认车。' },
+    confirm:     { type: 'boolean', description: '仅当工具上一轮提示"疑似重复"且用户明确确认后才传 true，用于跳过去重检查。正常记录不要传。' },
   } as const;
   readonly required = ['date', 'odometer', 'liters', 'price_total'];
 
   async execute(input: Record<string, unknown>, db: D1Database, lang: Lang): Promise<string> {
-    let { date, odometer, liters, price_total, fuel_type, note, vehicle } = input as {
+    let { date, odometer, liters, price_total, fuel_type, note, vehicle, confirm } = input as {
       date: string; odometer: number; liters: number; price_total: number;
-      fuel_type?: string; note?: string; vehicle?: string;
+      fuel_type?: string; note?: string; vehicle?: string; confirm?: boolean;
     };
 
     const r = await resolveVehicle(db, vehicle);
@@ -44,6 +46,16 @@ export class LogFuelTool implements Tool {
     // spec 011: 未提油号时，用车辆默认油号；车辆无默认则 fallback 到 95
     if (!fuel_type && r.status === 'resolved' && r.vehicle.fuel_type) {
       fuel_type = r.vehicle.fuel_type;
+    }
+
+    // spec 017: 写入前去重软拦截——同车同日里程相近视为疑似重复，未确认则先反问不落库
+    if (confirm !== true) {
+      const sameDay = await findFuelRecords(db, { vehicleId, date });
+      const dup = sameDay.find(rec => Math.abs(rec.odometer - odometer) <= FUEL_DUP_KM_THRESHOLD);
+      if (dup) {
+        return t('dup.fuel_warn', lang, date, fmtNumber(dup.odometer, lang),
+          fmtNumber(odometer, lang), String(Math.abs(odometer - dup.odometer)));
+      }
     }
 
     const prev = await getLastFuelRecord(db, vehicleId);
@@ -225,19 +237,25 @@ export class UpdateLastFuelTool implements Tool {
   }
 }
 
-// ── delete_last_fuel (spec 004) ───────────────────────────────────────────────
+// 加油记录单行摘要（删除预览/回显复用）。
+function fuelLine(rec: { date: string; odometer: number; liters: number; price_total: number }, lang: Lang): string {
+  return `${rec.date} · ${fmtNumber(rec.odometer, lang)} km · ${rec.liters} L · ¥${fmtNumber(rec.price_total, lang)}`;
+}
+
+// ── delete_last_fuel (spec 004 + 017 二次确认) ────────────────────────────────
 
 export class DeleteLastFuelTool implements Tool {
   readonly name = 'delete_last_fuel';
-  readonly description = '删除最近一条加油记录。用户说"删掉刚才那条""删除最近记录"时调用。';
-  readonly descriptionEn = 'Delete the most recent fuel record. Call when the user wants to undo a fuel entry.';
+  readonly description = '删除最近一条加油记录。用户说"删掉刚才那条""删除最近记录"时调用。两步：先不带 confirm 取确认预览，用户确认后再带 confirm=true 调用。';
+  readonly descriptionEn = 'Delete the most recent fuel record. Two-step: call without confirm to preview, then confirm=true after the user confirms.';
   readonly parameters = {
     vehicle: { type: 'string', description: '车辆名称（可选），未传则删默认车的最近记录。' },
+    confirm: { type: 'boolean', description: '用户在预览后明确确认才传 true，执行删除；否则不传。' },
   } as const;
   readonly required: string[] = [];
 
   async execute(input: Record<string, unknown>, db: D1Database, lang: Lang): Promise<string> {
-    const { vehicle } = input as { vehicle?: string };
+    const { vehicle, confirm } = input as { vehicle?: string; confirm?: boolean };
 
     const r = await resolveVehicle(db, vehicle);
     if (r.status === 'not_found') return t('general.vehicle_not_found', lang, r.name);
@@ -245,16 +263,61 @@ export class DeleteLastFuelTool implements Tool {
 
     const vehicleId = r.status === 'resolved' ? r.vehicle.id : undefined;
     const vehicleName = r.status === 'resolved' ? r.vehicle.name : undefined;
+    const tag = vehicleName ? t('fuel.vehicle_tag', lang, vehicleName) : '';
 
     const last = await getLastFuelRecord(db, vehicleId);
     if (!last) return t('general.no_fuel_records_delete', lang);
 
+    // spec 017: 未确认先回显预览，不删
+    if (confirm !== true) {
+      return t('delete.fuel_confirm', lang, tag, fuelLine(last, lang));
+    }
+
     await softDeleteFuelRecord(db, last.id, new Date().toISOString());
+    return [t('fuel.deleted', lang, tag), fuelLine(last, lang), t('fuel.deleted_detail', lang)].join('\n');
+  }
+}
+
+// ── delete_fuel (spec 017：按日期/里程定位任意加油记录) ────────────────────────
+
+export class DeleteFuelTool implements Tool {
+  readonly name = 'delete_fuel';
+  readonly description = '删除指定的某条加油记录（非最近一条），按日期和/或里程定位。两步：先不带 confirm 取预览，用户确认后再带 confirm=true。删最近一条用 delete_last_fuel。';
+  readonly descriptionEn = 'Delete a specific (not necessarily latest) fuel record, located by date and/or odometer. Two-step confirm. Use delete_last_fuel for the latest one.';
+  readonly parameters = {
+    date:     { type: 'string', description: '记录日期（ISO 8601），定位用' },
+    odometer: { type: 'number', description: '记录里程（km），定位用' },
+    vehicle:  { type: 'string', description: '车辆名称（可选），未传则在默认车内定位。' },
+    confirm:  { type: 'boolean', description: '用户在预览后明确确认才传 true，执行删除；否则不传。' },
+  } as const;
+  readonly required: string[] = [];
+
+  async execute(input: Record<string, unknown>, db: D1Database, lang: Lang): Promise<string> {
+    const { date, odometer, vehicle, confirm } = input as {
+      date?: string; odometer?: number; vehicle?: string; confirm?: boolean;
+    };
+
+    const r = await resolveVehicle(db, vehicle);
+    if (r.status === 'not_found') return t('general.vehicle_not_found', lang, r.name);
+    if (r.status === 'ambiguous') return ambiguousMsg(r.vehicles, t('ambiguous.delete', lang), lang);
+
+    const vehicleId = r.status === 'resolved' ? r.vehicle.id : undefined;
+    const vehicleName = r.status === 'resolved' ? r.vehicle.name : undefined;
     const tag = vehicleName ? t('fuel.vehicle_tag', lang, vehicleName) : '';
-    return [
-      t('fuel.deleted', lang, tag),
-      `${last.date} · ${fmtNumber(last.odometer, lang)} km · ${last.liters} L · ¥${fmtNumber(last.price_total, lang)}`,
-      t('fuel.deleted_detail', lang),
-    ].join('\n');
+
+    const matches = await findFuelRecords(db, { vehicleId, date, odometer });
+    if (matches.length === 0) return t('delete.fuel_not_found', lang);
+    if (matches.length > 1) {
+      const lines = matches.map(m => fuelLine(m, lang));
+      return t('delete.fuel_multi', lang, lines.join('\n'));
+    }
+
+    const target = matches[0];
+    if (confirm !== true) {
+      return t('delete.fuel_confirm', lang, tag, fuelLine(target, lang));
+    }
+
+    await softDeleteFuelRecord(db, target.id, new Date().toISOString());
+    return [t('delete.fuel_done', lang, tag), fuelLine(target, lang), t('delete.recover_hint', lang)].join('\n');
   }
 }

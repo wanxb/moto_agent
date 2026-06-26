@@ -73,6 +73,23 @@ export async function softDeleteFuelRecord(db: D1Database, id: number, deletedAt
   await db.prepare('UPDATE fuel_records SET deleted_at = ? WHERE id = ?').bind(deletedAt, id).run();
 }
 
+// 定位活跃加油记录（任意记录删除用）：按车 + 日期 + 里程任意组合过滤，按 date ASC, id ASC 正序。
+// 至少要给 date 或 odometer 之一，否则返回空数组（避免误把全部记录当候选）。
+export async function findFuelRecords(db: D1Database, opts: {
+  vehicleId?: number; date?: string; odometer?: number;
+}): Promise<FuelRecord[]> {
+  if (opts.date === undefined && opts.odometer === undefined) return [];
+  const where: string[] = ['deleted_at IS NULL'];
+  const binds: unknown[] = [];
+  if (opts.vehicleId !== undefined) { where.push('vehicle_id = ?'); binds.push(opts.vehicleId); }
+  if (opts.date !== undefined)      { where.push('date = ?');       binds.push(opts.date); }
+  if (opts.odometer !== undefined)  { where.push('odometer = ?');   binds.push(opts.odometer); }
+
+  const sql = 'SELECT * FROM fuel_records WHERE ' + where.join(' AND ') + ' ORDER BY date ASC, id ASC';
+  const { results } = await db.prepare(sql).bind(...binds).all<FuelRecord>();
+  return results;
+}
+
 // ── Vehicles (spec 001) ───────────────────────────────────────────────────────
 
 export async function insertVehicle(db: D1Database, name: string, opts?: {
@@ -178,16 +195,16 @@ export async function insertMaintenanceRecord(db: D1Database, data: {
 }
 
 // 按车（可选）+ 类型（可选，相等优先）过滤，按 date DESC, id DESC 倒序。
+// 所有读路径都过滤 deleted_at IS NULL（软删除，spec 017）。
 export async function getMaintenanceRecords(db: D1Database, opts: {
   vehicleId?: number; type?: string; limit?: number;
 } = {}): Promise<MaintenanceRecord[]> {
-  const where: string[] = [];
+  const where: string[] = ['deleted_at IS NULL'];
   const binds: unknown[] = [];
   if (opts.vehicleId !== undefined) { where.push('vehicle_id = ?'); binds.push(opts.vehicleId); }
   if (opts.type !== undefined)      { where.push('type = ?');       binds.push(opts.type); }
 
-  let sql = 'SELECT * FROM maintenance_records';
-  if (where.length) sql += ' WHERE ' + where.join(' AND ');
+  let sql = 'SELECT * FROM maintenance_records WHERE ' + where.join(' AND ');
   sql += ' ORDER BY date DESC, id DESC';
   if (opts.limit !== undefined) { sql += ' LIMIT ?'; binds.push(opts.limit); }
 
@@ -200,6 +217,26 @@ export async function getLastMaintenanceByType(
 ): Promise<MaintenanceRecord | null> {
   const records = await getMaintenanceRecords(db, { vehicleId, type, limit: 1 });
   return records[0] ?? null;
+}
+
+// 定位活跃维保记录（删除/去重用）：按车 + 类型 + 日期任意组合过滤，按 date ASC, id ASC 正序
+// （最早在前，便于 keep_one 保留最早一条）。仅返回未软删除的。
+export async function findMaintenanceRecords(db: D1Database, opts: {
+  vehicleId?: number; type?: string; date?: string;
+}): Promise<MaintenanceRecord[]> {
+  const where: string[] = ['deleted_at IS NULL'];
+  const binds: unknown[] = [];
+  if (opts.vehicleId !== undefined) { where.push('vehicle_id = ?'); binds.push(opts.vehicleId); }
+  if (opts.type !== undefined)      { where.push('type = ?');       binds.push(opts.type); }
+  if (opts.date !== undefined)      { where.push('date = ?');       binds.push(opts.date); }
+
+  const sql = 'SELECT * FROM maintenance_records WHERE ' + where.join(' AND ') + ' ORDER BY date ASC, id ASC';
+  const { results } = await db.prepare(sql).bind(...binds).all<MaintenanceRecord>();
+  return results;
+}
+
+export async function softDeleteMaintenanceRecord(db: D1Database, id: number, deletedAt: string): Promise<void> {
+  await db.prepare('UPDATE maintenance_records SET deleted_at = ? WHERE id = ?').bind(deletedAt, id).run();
 }
 
 // 跨 fuel + mileage 记录取该车（或全部）最新里程，供里程提醒判定。

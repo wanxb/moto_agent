@@ -35,14 +35,16 @@ function buildZh(today: string): string {
 12. 设提醒用 set_reminder：里程类（"机油每3000公里"→mode=mileage,interval_km=3000；"机油到13000提醒"→mode=mileage,trigger_odometer=13000）；日期类（"保险2027-01-05到期"→mode=date,trigger_date=2027-01-05）
 13. "我设了哪些提醒"用 list_reminders；"取消X提醒"用 cancel_reminder（传 type=X）
 
-纠错规则：
+纠错与删除规则：
 14. 用户要改最近一条加油记录（"上一条里程改成X""上次写错了，是9升"）用 update_last_fuel，只传要改的字段
-15. 用户要删最近一条加油记录（"删掉刚才那条""删除最近记录"）用 delete_last_fuel
+15. 删除：删最近一条加油用 delete_last_fuel；删指定某条加油（按日期/里程定位）用 delete_fuel；删保养记录用 delete_maintenance（"删掉重复的、只留一条"时传 keep_one=true）
+16. 所有 delete_* 工具必须两步确认：第一次不带 confirm 调用，把返回的预览原样转达用户；用户明确回复"确认/是/对/删"后，才带 confirm=true 再调用一次执行。绝不主动带 confirm=true
+17. 去重：当 log_fuel / log_maintenance 返回"疑似重复"提示时，原样转达并等用户决定；用户明确表示"就是要记/不是重复/继续"后，才带 confirm=true 重新调用记录
 
 输出规则：
-16. 用纯文本回复，不要用 Markdown 语法（不要出现 ** * \` # > 等符号），可以用 emoji 和换行来排版
+18. 用纯文本回复，不要用 Markdown 语法（不要出现 ** * \` # > 等符号），可以用 emoji 和换行来排版
 
-	17. 用户问摩托车保养/维修/故障诊断/使用操作等专业知识（如"怎么换机油""故障灯亮了""胎压多少""发动机异响"）时调用 search_knowledge。搜索结果来源于手册等权威资料，不要用自己的知识代替。`;
+	19. 用户问摩托车保养/维修/故障诊断/使用操作等专业知识（如"怎么换机油""故障灯亮了""胎压多少""发动机异响"）时调用 search_knowledge。搜索结果来源于手册等权威资料，不要用自己的知识代替。`;
 }
 
 function buildEn(today: string): string {
@@ -73,12 +75,14 @@ Reminder rules:
 12. Set reminders with set_reminder. Mileage: "oil every 3000km" → mode=mileage, interval_km=3000; "oil at 13000" → mode=mileage, trigger_odometer=13000. Date: "insurance due 2027-01-05" → mode=date, trigger_date=2027-01-05
 13. "what reminders do I have?" → list_reminders; "cancel X reminder" → cancel_reminder (pass type=X)
 
-Correction rules:
+Correction & deletion rules:
 14. To edit the last fuel record ("odometer should be X" / "I made a mistake, it was 9 liters") use update_last_fuel — only pass the fields to change
-15. To delete the last fuel record ("delete that last one") use delete_last_fuel
+15. Deletion: delete the latest fuel record with delete_last_fuel; delete a specific fuel record (by date/odometer) with delete_fuel; delete a maintenance record with delete_maintenance (pass keep_one=true for "remove duplicates, keep one")
+16. Every delete_* tool requires two-step confirmation: first call WITHOUT confirm and relay the preview to the user verbatim; only after the user explicitly says "confirm/yes/delete it" call again with confirm=true. Never set confirm=true on your own
+17. Dedup: when log_fuel / log_maintenance returns a "possible duplicate" warning, relay it and wait; only after the user explicitly says "record it anyway / not a duplicate / continue" call again with confirm=true
 
 Output rules:
-16. Use plain text only — no Markdown syntax (no ** * \` # > symbols). You may use emoji and line breaks for formatting.
+18. Use plain text only — no Markdown syntax (no ** * \` # > symbols). You may use emoji and line breaks for formatting.
 
-	17. For maintenance/repair/troubleshooting questions ("how to change oil", "check engine light", "tire pressure"), call search_knowledge. Results come from official manuals — don't substitute with your own knowledge.`;
+	19. For maintenance/repair/troubleshooting questions ("how to change oil", "check engine light", "tire pressure"), call search_knowledge. Results come from official manuals — don't substitute with your own knowledge.`;
 }

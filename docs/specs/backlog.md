@@ -25,6 +25,12 @@
 
 ---
 
+## 去重 + 删除扩展 → 已升级为 [spec 017](017-dedup-delete/)
+
+> 已从概览升级为完整规格并实现（✔️ 待部署）。写入时去重软拦截（log_fuel/log_maintenance + `confirm`）；`maintenance_records` 补 `deleted_at` 软删除（迁移 0008）；新增 `delete_maintenance`（含 `keep_one` 去重）/`delete_fuel`，所有删除两步确认。详见 [`017-dedup-delete/`](017-dedup-delete/)。
+
+---
+
 ## 语音输入 → 已升级为 [spec 008](008-voice-input/)
 
 > 已从概览升级为完整规格并实现（✔️ 待部署+冒烟）。用 Cloudflare Workers AI（Whisper）转写，留在 CF 生态、无需转码、无新 key。详见 [`008-voice-input/`](008-voice-input/) 与 [ADR-0007](../engineering/adr/0007-cloudflare-workers-ai-stt.md)。

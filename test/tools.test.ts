@@ -199,3 +199,73 @@ describe('真实历史数据集成验证', () => {
     expect(result).toContain('4.16');
   });
 });
+
+// ── 加油去重软拦截（spec 017）──────────────────────────────────────────────────
+
+describe('log_fuel dedup (spec 017)', () => {
+  it('warns and does NOT write when same day + near-identical odometer', async () => {
+    await insertFuelRecord(env.DB, { date: '2026-06-01', odometer: 10000, liters: 10, price_total: 98 });
+    const result = await dispatchTool('log_fuel', {
+      date: '2026-06-01', odometer: 10001, liters: 10, price_total: 98,
+    }, env.DB);
+    expect(result).toContain('疑似重复');
+
+    // 第二条没有落库（仍只有 1 条最近记录）
+    const last = await dispatchTool('get_last_record', {}, env.DB);
+    expect(last).toContain('10,000');
+  });
+
+  it('confirm=true bypasses dedup and writes', async () => {
+    await insertFuelRecord(env.DB, { date: '2026-06-01', odometer: 10000, liters: 10, price_total: 98 });
+    const result = await dispatchTool('log_fuel', {
+      date: '2026-06-01', odometer: 10001, liters: 10, price_total: 98, confirm: true,
+    }, env.DB);
+    expect(result).toContain('✅ 已记录');
+  });
+
+  it('same day but far odometer is not a duplicate', async () => {
+    await insertFuelRecord(env.DB, { date: '2026-06-01', odometer: 10000, liters: 10, price_total: 98 });
+    const result = await dispatchTool('log_fuel', {
+      date: '2026-06-01', odometer: 10200, liters: 10, price_total: 98,
+    }, env.DB);
+    expect(result).toContain('✅ 已记录');
+  });
+});
+
+// ── 加油删除二次确认（spec 017）────────────────────────────────────────────────
+
+describe('delete_last_fuel / delete_fuel (spec 017)', () => {
+  it('delete_last_fuel two-step: preview then confirm', async () => {
+    await insertFuelRecord(env.DB, { date: '2026-06-01', odometer: 10000, liters: 10, price_total: 98 });
+    await insertFuelRecord(env.DB, { date: '2026-06-10', odometer: 10200, liters: 9, price_total: 88 });
+
+    const preview = await dispatchTool('delete_last_fuel', {}, env.DB);
+    expect(preview).toContain('确定删除');
+    // 未删：最近仍是 06-10
+    expect(await dispatchTool('get_last_record', {}, env.DB)).toContain('2026-06-10');
+
+    const done = await dispatchTool('delete_last_fuel', { confirm: true }, env.DB);
+    expect(done).toContain('🗑 已删除');
+    // 删后回退到 06-01
+    expect(await dispatchTool('get_last_record', {}, env.DB)).toContain('2026-06-01');
+  });
+
+  it('delete_fuel locates an arbitrary record by date and confirms', async () => {
+    await insertFuelRecord(env.DB, { date: '2026-06-01', odometer: 10000, liters: 10, price_total: 98 });
+    await insertFuelRecord(env.DB, { date: '2026-06-10', odometer: 10200, liters: 9, price_total: 88 });
+
+    const preview = await dispatchTool('delete_fuel', { date: '2026-06-01' }, env.DB);
+    expect(preview).toContain('确定删除');
+
+    const done = await dispatchTool('delete_fuel', { date: '2026-06-01', confirm: true }, env.DB);
+    expect(done).toContain('🗑 已删除加油记录');
+    // 最近一条仍是 06-10（删的是 06-01）
+    expect(await dispatchTool('get_last_record', {}, env.DB)).toContain('2026-06-10');
+  });
+
+  it('delete_fuel reports not found when nothing matches', async () => {
+    await insertFuelRecord(env.DB, { date: '2026-06-01', odometer: 10000, liters: 10, price_total: 98 });
+    const result = await dispatchTool('delete_fuel', { date: '2099-01-01' }, env.DB);
+    expect(result).toContain('没有找到');
+  });
+});

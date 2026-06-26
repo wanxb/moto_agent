@@ -134,6 +134,21 @@ export const en: Record<string, string> = {
   'knowledge.search_failed': 'Knowledge search failed (search error), please try again.',
   'knowledge.no_results': '📖 No relevant information found in the knowledge base. Consider consulting a professional service shop.',
 
+  // ── Dedup & Delete (spec 017) ──
+  'dup.fuel_warn': '⚠️ Possible duplicate fuel record\nThere is already a record on {0} at {1} km, only {3} km from this {2} km.\nRecord anyway? Reply "confirm" to continue.',
+  'dup.maint_warn': '⚠️ Possible duplicate maintenance record\nThere is already a "{0}" record around {1}.\nRecord anyway? Reply "confirm" to continue.',
+  'delete.recover_hint': '(Contact admin to recover)',
+  'delete.fuel_confirm': '⚠️ Delete this fuel record{0}?\n{1}\nReply "confirm" to continue.',
+  'delete.fuel_done': '🗑 Deleted fuel record{0}',
+  'delete.fuel_not_found': 'No matching fuel record found (specify date or odometer).',
+  'delete.fuel_multi': 'Found multiple matching fuel records. Please specify which to delete:\n{0}',
+  'delete.maint_confirm': '⚠️ Delete this maintenance record{0}?\n{1}\nReply "confirm" to continue.',
+  'delete.maint_done': '🗑 Deleted maintenance record{0}',
+  'delete.maint_not_found': 'No matching maintenance record found.',
+  'delete.maint_multi': 'Found multiple matching maintenance records. Specify which one, or say "keep only one" to remove duplicates:\n{0}',
+  'delete.maint_keep_one_confirm': '⚠️ Found {0} duplicate maintenance records{1}. Keeping the earliest, deleting the other {2}:\n{3}\nReply "confirm" to continue.',
+  'delete.maint_kept_one': '🗑 Deleted {0} duplicate maintenance records{1}, kept the earliest.',
+
   // ── Units ──
   'unit.km': 'km',
   'unit.l': 'L',

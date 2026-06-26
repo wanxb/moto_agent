@@ -134,6 +134,21 @@ export const zh: Record<string, string> = {
   'knowledge.search_failed': '知识库检索失败（搜索错误），请稍后重试。',
   'knowledge.no_results': '📖 知识库中未找到相关信息。建议去专业维修站咨询。',
 
+  // ── 去重 & 删除（spec 017）──
+  'dup.fuel_warn': '⚠️ 疑似重复加油记录\n{0} 已有一条 {1} km 的记录，与本次 {2} km 相差仅 {3} km。\n确认要继续记录吗？回复"确认"继续。',
+  'dup.maint_warn': '⚠️ 疑似重复保养记录\n{1} 附近已有一条「{0}」记录。\n确认要继续记录吗？回复"确认"继续。',
+  'delete.recover_hint': '（如需恢复请联系管理员）',
+  'delete.fuel_confirm': '⚠️ 确定删除这条加油记录吗{0}？\n{1}\n回复"确认"继续。',
+  'delete.fuel_done': '🗑 已删除加油记录{0}',
+  'delete.fuel_not_found': '没有找到匹配的加油记录（请说明日期或里程）。',
+  'delete.fuel_multi': '找到多条匹配的加油记录，请说明删哪一条：\n{0}',
+  'delete.maint_confirm': '⚠️ 确定删除这条保养记录吗{0}？\n{1}\n回复"确认"继续。',
+  'delete.maint_done': '🗑 已删除保养记录{0}',
+  'delete.maint_not_found': '没有找到匹配的保养记录。',
+  'delete.maint_multi': '找到多条匹配的保养记录，请说明删哪一条，或说"只保留一条"删除重复：\n{0}',
+  'delete.maint_keep_one_confirm': '⚠️ 找到 {0} 条重复保养记录{1}，将保留最早一条、删除其余 {2} 条：\n{3}\n回复"确认"继续。',
+  'delete.maint_kept_one': '🗑 已删除 {0} 条重复保养记录{1}，保留最早一条。',
+
   // ── 单位 ──
   'unit.km': 'km',
   'unit.l': 'L',

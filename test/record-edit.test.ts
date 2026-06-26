@@ -104,11 +104,18 @@ describe('update_last_fuel (tools)', () => {
 // ── tools: delete_last_fuel ───────────────────────────────────────────────────
 
 describe('delete_last_fuel (tools)', () => {
-  it('AC5/AC6 — soft delete then last falls back to previous', async () => {
+  it('AC5/AC6 — soft delete then last falls back to previous (spec 017 二次确认)', async () => {
     await dispatchTool('log_fuel', { date: '2026-05-01', odometer: 9000, liters: 10, price_total: 97 }, env.DB);
     await dispatchTool('log_fuel', { date: '2026-06-01', odometer: 10000, liters: 9, price_total: 88 }, env.DB);
 
-    const result = await dispatchTool('delete_last_fuel', {}, env.DB);
+    // 第一步：不带 confirm 仅返回预览，不删
+    const preview = await dispatchTool('delete_last_fuel', {}, env.DB);
+    expect(preview).toContain('确定删除');
+    expect(preview).toContain('10,000');
+    expect((await getLastFuelRecord(env.DB))!.odometer).toBe(10000);   // 仍在
+
+    // 第二步：confirm=true 执行软删
+    const result = await dispatchTool('delete_last_fuel', { confirm: true }, env.DB);
     expect(result).toContain('🗑 已删除最近一条加油记录');
     expect(result).toContain('10,000');
 
@@ -130,7 +137,7 @@ describe('delete_last_fuel (tools)', () => {
     await insertFuelRecord(env.DB, { date: '2026-06-01', odometer: 13500, liters: 10, price_total: 98, vehicle_id: green });
     expect(await getLatestOdometer(env.DB, green)).toBe(13500);
 
-    await dispatchTool('delete_last_fuel', { vehicle: '小绿' }, env.DB);
+    await dispatchTool('delete_last_fuel', { vehicle: '小绿', confirm: true }, env.DB);
     expect(await getLatestOdometer(env.DB, green)).toBeNull();   // 删后无有效里程
   });
 });

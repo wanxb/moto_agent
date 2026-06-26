@@ -4,6 +4,7 @@ import { dispatchTool } from '../src/tools';
 import {
   insertVehicle, getVehicleByName,
   insertMaintenanceRecord, getMaintenanceRecords, getLastMaintenanceByType,
+  softDeleteMaintenanceRecord, findMaintenanceRecords,
 } from '../src/database';
 import { initDB, clearDB } from './utils';
 
@@ -136,5 +137,105 @@ describe('query_maintenance (tools)', () => {
     await dispatchTool('add_vehicle', { name: '小绿' }, env.DB);
     const result = await dispatchTool('query_maintenance', { type: '机油', last_only: true, vehicle: '小绿' }, env.DB);
     expect(result).toContain('暂无「机油」保养记录');
+  });
+});
+
+// ── soft delete (spec 017) ────────────────────────────────────────────────────
+
+describe('maintenance soft delete (spec 017)', () => {
+  it('softDeleteMaintenanceRecord excludes the row from all read paths', async () => {
+    await insertMaintenanceRecord(env.DB, { date: '2026-06-01', type: '机油', odometer: 12000 });
+    await insertMaintenanceRecord(env.DB, { date: '2026-06-10', type: '机油', odometer: 12500 });
+    const before = await getMaintenanceRecords(env.DB, { type: '机油' });
+    expect(before).toHaveLength(2);
+
+    await softDeleteMaintenanceRecord(env.DB, before[0].id, new Date().toISOString());
+
+    const after = await getMaintenanceRecords(env.DB, { type: '机油' });
+    expect(after).toHaveLength(1);
+    expect(after[0].id).toBe(before[1].id);
+    // findMaintenanceRecords 也只返回活跃记录
+    expect(await findMaintenanceRecords(env.DB, { type: '机油' })).toHaveLength(1);
+    // 最近一次也回退到未删除那条
+    expect((await getLastMaintenanceByType(env.DB, '机油'))!.id).toBe(before[1].id);
+  });
+});
+
+// ── dedup soft-intercept on log_maintenance (spec 017) ────────────────────────
+
+describe('log_maintenance dedup (spec 017)', () => {
+  it('warns and does NOT write when same type within ±1 day', async () => {
+    await dispatchTool('add_vehicle', { name: '小绿' }, env.DB);
+    await dispatchTool('log_maintenance', { date: '2026-06-25', type: '轮胎', note: '补胎' }, env.DB);
+
+    const result = await dispatchTool('log_maintenance', { date: '2026-06-25', type: '轮胎', note: '补胎' }, env.DB);
+    expect(result).toContain('疑似重复');
+
+    // 第二条没有落库
+    expect(await getMaintenanceRecords(env.DB, { type: '轮胎' })).toHaveLength(1);
+  });
+
+  it('confirm=true bypasses the dedup check and writes', async () => {
+    await dispatchTool('add_vehicle', { name: '小绿' }, env.DB);
+    await dispatchTool('log_maintenance', { date: '2026-06-25', type: '轮胎' }, env.DB);
+    const result = await dispatchTool('log_maintenance', { date: '2026-06-25', type: '轮胎', confirm: true }, env.DB);
+    expect(result).toContain('✅ 已记录保养');
+    expect(await getMaintenanceRecords(env.DB, { type: '轮胎' })).toHaveLength(2);
+  });
+
+  it('different type on same day is not a duplicate', async () => {
+    await dispatchTool('add_vehicle', { name: '小绿' }, env.DB);
+    await dispatchTool('log_maintenance', { date: '2026-06-25', type: '机油' }, env.DB);
+    const result = await dispatchTool('log_maintenance', { date: '2026-06-25', type: '轮胎' }, env.DB);
+    expect(result).toContain('✅ 已记录保养');
+  });
+});
+
+// ── delete_maintenance (spec 017) ─────────────────────────────────────────────
+
+describe('delete_maintenance (spec 017)', () => {
+  it('two-step: preview without confirm does not delete, confirm=true deletes', async () => {
+    await dispatchTool('add_vehicle', { name: '小绿' }, env.DB);
+    await insertMaintenanceRecord(env.DB, { date: '2026-06-01', type: '机油', odometer: 12000,
+      vehicle_id: (await getVehicleByName(env.DB, '小绿'))!.id });
+
+    const preview = await dispatchTool('delete_maintenance', { type: '机油', date: '2026-06-01' }, env.DB);
+    expect(preview).toContain('确定删除');
+    expect(await getMaintenanceRecords(env.DB, { type: '机油' })).toHaveLength(1);   // 未删
+
+    const done = await dispatchTool('delete_maintenance', { type: '机油', date: '2026-06-01', confirm: true }, env.DB);
+    expect(done).toContain('🗑 已删除保养记录');
+    expect(await getMaintenanceRecords(env.DB, { type: '机油' })).toHaveLength(0);   // 已删
+  });
+
+  it('not found when nothing matches', async () => {
+    await dispatchTool('add_vehicle', { name: '小绿' }, env.DB);
+    const result = await dispatchTool('delete_maintenance', { type: '机油', date: '2099-01-01' }, env.DB);
+    expect(result).toContain('没有找到');
+  });
+
+  it('multiple matches without keep_one asks to narrow', async () => {
+    const green = await insertVehicle(env.DB, '小绿', { isDefault: true });
+    await insertMaintenanceRecord(env.DB, { date: '2026-06-25', type: '轮胎', note: '补胎A', vehicle_id: green });
+    await insertMaintenanceRecord(env.DB, { date: '2026-06-25', type: '轮胎', note: '补胎B', vehicle_id: green });
+    const result = await dispatchTool('delete_maintenance', { type: '轮胎', date: '2026-06-25' }, env.DB);
+    expect(result).toContain('找到多条');
+    expect(await getMaintenanceRecords(env.DB, { type: '轮胎' })).toHaveLength(2);   // 未删
+  });
+
+  it('keep_one removes all but the earliest after confirm', async () => {
+    const green = await insertVehicle(env.DB, '小绿', { isDefault: true });
+    await insertMaintenanceRecord(env.DB, { date: '2026-06-25', type: '轮胎', note: '后胎扎钉补胎', vehicle_id: green });
+    await insertMaintenanceRecord(env.DB, { date: '2026-06-25', type: '轮胎', note: '后胎被扎补胎', vehicle_id: green });
+
+    const preview = await dispatchTool('delete_maintenance', { type: '轮胎', date: '2026-06-25', keep_one: true }, env.DB);
+    expect(preview).toContain('保留最早一条');
+    expect(await getMaintenanceRecords(env.DB, { type: '轮胎' })).toHaveLength(2);   // 未删
+
+    const done = await dispatchTool('delete_maintenance', { type: '轮胎', date: '2026-06-25', keep_one: true, confirm: true }, env.DB);
+    expect(done).toContain('已删除 1 条重复');
+    const left = await getMaintenanceRecords(env.DB, { type: '轮胎' });
+    expect(left).toHaveLength(1);
+    expect(left[0].note).toBe('后胎扎钉补胎');   // 保留最早插入的那条
   });
 });

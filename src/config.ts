@@ -40,3 +40,9 @@ export const RATE_LIMIT_AUTH = 5;
 // ── 数据库 ───────────────────────────────────────────────────────────────────
 /** fuel_records 可 UPDATE 的列白名单（防注入） */
 export const FUEL_EDITABLE_COLUMNS = ['date', 'odometer', 'liters', 'price_total', 'fuel_type', 'note'] as const;
+
+// ── 去重（spec 017）─────────────────────────────────────────────────────────
+/** 加油去重：同车同日里程差 ≤ 此值（km）视为疑似重复，写入前软拦截 */
+export const FUEL_DUP_KM_THRESHOLD = 2;
+/** 维保去重：同车同类型且日期差 ≤ 此值（天）视为疑似重复，写入前软拦截 */
+export const MAINT_DUP_DAYS = 1;

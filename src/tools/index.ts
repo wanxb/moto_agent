@@ -5,13 +5,13 @@ import type { ToolDefinition } from '../types';
 import { ToolRegistry } from './interface';
 
 // Fuel
-import { LogFuelTool, QueryStatsTool, GetLastRecordTool, UpdateLastFuelTool, DeleteLastFuelTool } from './fuel-tools';
+import { LogFuelTool, QueryStatsTool, GetLastRecordTool, UpdateLastFuelTool, DeleteLastFuelTool, DeleteFuelTool } from './fuel-tools';
 // Vehicle
 import { AddVehicleTool, ListVehiclesTool, SetDefaultVehicleTool, RenameVehicleTool, SetVehicleAliasTool, UpdateVehicleTool } from './vehicle-tools';
 // Mileage
 import { LogMileageTool } from './mileage-tools';
 // Maintenance
-import { LogMaintenanceTool, QueryMaintenanceTool } from './maintenance-tools';
+import { LogMaintenanceTool, QueryMaintenanceTool, DeleteMaintenanceTool } from './maintenance-tools';
 // Reminder
 import { SetReminderTool, ListRemindersTool, CancelReminderTool } from './reminder-tools';
 
@@ -30,11 +30,13 @@ export const registry = new ToolRegistry()
   .register(new UpdateVehicleTool())
   .register(new LogMaintenanceTool())
   .register(new QueryMaintenanceTool())
+  .register(new DeleteMaintenanceTool())
   .register(new SetReminderTool())
   .register(new ListRemindersTool())
   .register(new CancelReminderTool())
   .register(new UpdateLastFuelTool())
-  .register(new DeleteLastFuelTool());
+  .register(new DeleteLastFuelTool())
+  .register(new DeleteFuelTool());
 
 // ── 兼容旧接口（agent.ts / eval.ts / 测试 沿用） ────────────────────────────────
 

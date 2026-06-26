@@ -83,6 +83,7 @@ export interface MaintenanceRecord {
   cost: number | null;
   note: string | null;
   vehicle_id: number | null;
+  deleted_at: string | null;   // 软删除时刻（spec 017，null=活跃）
   created_at: string;
 }
 
