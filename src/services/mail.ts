@@ -40,10 +40,10 @@ export async function sendMagicLinkEmail(env: Env, email: string, link: string):
   );
 }
 
-/** 发 Telegram 绑定验证码邮件（10 分钟有效）。 */
-export async function sendBindCodeEmail(env: Env, email: string, code: string): Promise<void> {
+/** 发账号绑定验证链接邮件（10 分钟有效）。点击即把数据并入此邮箱账号。 */
+export async function sendBindLinkEmail(env: Env, email: string, link: string): Promise<void> {
   await sendEmail(
-    env, email, '🔗 Moto Bot 绑定验证码',
-    `你的绑定验证码是 ${code}（10 分钟内有效）。\n请在 PWA 设置页输入完成 Telegram 绑定。\n\n如果非本人操作，请忽略此邮件。`,
+    env, email, '🔗 Moto Bot 账号绑定',
+    `点击以下链接完成账号绑定（10 分钟内有效）：\n\n${link}\n\n确认后，你的记录将归入此邮箱账号。\n如果非本人操作，请忽略此邮件。`,
   );
 }

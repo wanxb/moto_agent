@@ -7,20 +7,19 @@ import { transcribe } from './stt';
 import { bootstrap } from './bootstrap';
 import { TelegramAdapter } from './gateway/adapters/telegram';
 import { RestAdapter } from './gateway/adapters/rest';
-import { MAX_VOICE_SECONDS, BIND_CODE_TTL } from './config';
+import { MAX_VOICE_SECONDS, BIND_LINK_TTL } from './config';
 import { handleApiRequest } from './routes/api';
 import { handleAuthRequest } from './routes/auth-handler';
 import { handleChatRequest } from './routes/chat-api';
 import { checkRateLimit, RULES } from './gateway/rate-limiter';
-import { sendBindCodeEmail } from './services/mail';
-import { getUserByEmail } from './database';
+import { sendBindLinkEmail } from './services/mail';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-/** 加密随机 6 位绑定码（前导零补齐）。 */
-function sixDigitCode(): string {
-  const n = crypto.getRandomValues(new Uint32Array(1))[0] % 1000000;
-  return n.toString().padStart(6, '0');
+/** 站点 origin（用于拼绝对链接）。DASHBOARD_URL 可能带 /dashboard 路径，取其 origin 即可。 */
+function siteOrigin(env: Env): string {
+  if (env.DASHBOARD_URL) { try { return new URL(env.DASHBOARD_URL).origin; } catch { /* 忽略，回退空 */ } }
+  return '';
 }
 
 function makeWelcome(lang: Lang): string {
@@ -95,7 +94,8 @@ function createBot(env: Env): Bot {
     return ctx.reply(t('dashboard.link', lang, link), { parse_mode: 'HTML' });
   });
 
-  // spec 016: 把当前 Telegram 账号绑定到 PWA 邮箱账号（发验证码到邮箱，PWA 设置页输码完成）。
+  // spec 016: 账号绑定（仅在 Telegram 内发起）。输入邮箱 → 发验证链接 → 点击即把本 TG 账号数据并入该邮箱账号。
+  // PWA 完全不感知此流程；纯 PWA 用户无需知道 Telegram 的存在。
   bot.command('bind', async ctx => {
     const chatId = ctx.chat.id.toString();
     const lang = await resolveLang(env, chatId, ctx.from?.language_code);
@@ -104,32 +104,33 @@ function createBot(env: Env): Bot {
       await ctx.reply(t('bind.usage', lang));
       return;
     }
-    // 无 IP，用 chatId 做限流键，防验证码邮件轰炸
+    const origin = siteOrigin(env);
+    if (!origin) {
+      await ctx.reply(t('bind.mail_failed', lang));   // 没配站点地址，拼不出链接
+      return;
+    }
+    // 无 IP，用 chatId 做限流键，防验证邮件轰炸
     const rl = await checkRateLimit(env.SESSION_KV, `auth:bind:${email}:${chatId}`, RULES['auth:send']);
     if (!rl.allowed) {
       await ctx.reply(t('bind.rate_limited', lang));
       return;
     }
-    // 前置：邮箱账号必须已在 PWA 注册（避免 UPDATE ... WHERE email= 影响 0 行的静默失败）
-    const user = await getUserByEmail(env.DB, email);
-    if (!user) {
-      await ctx.reply(t('bind.email_not_found', lang));
-      return;
-    }
-    const code = sixDigitCode();
+    // 链接式：token 关联 {email, telegram_id}，点击后 get-or-create 邮箱账号并合并 TG 数据。
+    const token = crypto.randomUUID();
+    const expiresAt = Math.floor(Date.now() / 1000) + BIND_LINK_TTL;
     await env.SESSION_KV.put(
-      `bind_code:${email}`,
-      JSON.stringify({ code, telegram_id: chatId }),
-      { expirationTtl: BIND_CODE_TTL },
+      `bind_link:${token}`,
+      JSON.stringify({ email, telegram_id: chatId, expiresAt }),
+      { expirationTtl: BIND_LINK_TTL },
     );
     try {
-      await sendBindCodeEmail(env, email, code);
+      await sendBindLinkEmail(env, email, `${origin}/auth/bind?token=${token}`);
     } catch (e) {
       console.error('[bind] mail error:', e instanceof Error ? e.message : String(e));
       await ctx.reply(t('bind.mail_failed', lang));
       return;
     }
-    await ctx.reply(t('bind.code_sent', lang, email));
+    await ctx.reply(t('bind.link_sent', lang, email));
   });
 
   bot.on('message:text', async ctx => {

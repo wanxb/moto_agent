@@ -101,18 +101,19 @@
   - `pipeline.ts` `PipelineContext` 加 `resolveUserId` 钩子，注入 agent 实现隔离
   - `bootstrap.ts` 接上 `resolveUserId`（空标识 → undefined，保单用户兼容）
   - `index.ts` 移除白名单中间件（端点仍受 webhook secret 保护）
+> **绑定改为链接式（2026-06-26 修订）**：绑定**只在 Telegram 内发起**，PWA 零 Telegram 文案。`/bind <email>` 发验证链接 → 点击确认页 → 数据并入邮箱账号并登录。废弃"PWA 输码"。
+
 - [x] **T7.1** 在 `bot.on('message:text')` 之前新增 `/bind` 命令 handler：
-  - 参数校验（邮箱格式）
-  - **前置检查**：`getUserByEmail` 不存在 → 回复"请先在 PWA 用该邮箱注册后再绑定"，不发码
+  - 参数校验（邮箱格式）；用 `DASHBOARD_URL` 的 **origin** 拼链接（避免 /dashboard 路径污染）
   - `email+chatId` 限流（TG 无 IP）
-  - 生成 6 位验证码 → 存 `bind_code:{email}`（值含 `telegram_id`，10 分钟 TTL）
-  - 通过 **Resend** 发验证码邮件
-  - 回复用户"验证码已发送到邮箱"
-- [x] **T7.2** 实现验证码校验（`POST /auth/bind`，用户在 PWA 设置页输码）：
-  - 校验 `bind_code:{email}` 匹配且未过期、`telegram_id` 一致
-  - 调 `bindTelegramToUser`：情形 A 直接挂载；情形 B **账号合并**（迁数据、旧号失活，design §3.2）
-  - 校验失败/邮箱已被他人绑定 → 可读错误
-  - 验证：/bind → 收邮件 → PWA 输码 → 绑定/合并成功 → TG 和 PWA 数据一致
+  - 生成 token → 存 `bind_link:{token}`（值含 `{email, telegram_id, expiresAt}`，10 分钟 TTL）
+  - 通过 **Resend** 发验证**链接**邮件（非验证码）
+  - 回复用户"验证链接已发送到邮箱"
+- [x] **T7.2** 链接式绑定端点（`auth-handler.ts`）：
+  - `GET /auth/bind?token=`：仅渲染确认页，**不消费 token**（防邮件网关预取）
+  - `POST /auth/bind`：消费 token → `get-or-create` 邮箱账号 → `bindTelegramToUser`（情形 A 直接挂载；情形 B **账号合并**，design §3.2）→ 建 session → 302 `/chat`
+  - 邮箱已被他人绑定 → 确认页可读错误
+  - 验证：/bind → 收邮件 → 点链接 → 确认 → 绑定/合并成功并登录；TG 与 PWA 数据一致
 
 ### T8 登录页 + 设置页（Svelte 路由）
 
@@ -120,13 +121,11 @@
   - 品牌 Logo + 邮箱输入框 + "发送登录链接"（`POST /auth/send-link`）+ 使用说明
   - 发送成功态："邮件已发送，请检查收件箱"
   - 注：`GET /auth/verify` 确认页是 Worker 返回的最小服务端 HTML（防预取），**不在 SPA 内**
-  - **决策**：绑定验证码输入移到 Settings（登录态下才合理，邮箱自动取自 `/api/v1/me`），不放 Login
-- [x] **T8.2** `web/src/routes/Settings.svelte`：
-  - 当前用户信息（邮箱、绑定状态，来自 `/api/v1/me`）
+- [x] **T8.2** `web/src/routes/Settings.svelte`（**PWA 零 Telegram 文案**）：
+  - 当前用户信息（邮箱，来自 `/api/v1/me`）
   - 语言切换（中/英）：即时切 UI（localStorage）+ 持久化到 `users.lang`（新增 `POST /api/v1/me {lang}`，否则对话回复语言与 UI 不一致）
-  - Telegram 绑定：未绑定 → 6 位验证码输入 `POST /auth/bind`，成功后刷新状态；已绑定 → 显示状态
-  - **解绑暂不开放**（无后端端点，显示提示文案而非假按钮，留后续）
   - 登出按钮（`POST /auth/logout` → 跳 `/login`）
+  - **不含任何 Telegram/绑定 UI**：绑定只在 TG 内发起（T7），PWA 用户无需知道 Telegram 存在
   - 验证：正确显示用户信息；语言切换即时生效并持久化
 
 ### T9 PWA manifest + 安装支持

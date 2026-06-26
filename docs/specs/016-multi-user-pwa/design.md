@@ -165,46 +165,41 @@ User                     PWA                      Worker                 Resend 
 
 **Session Cookie 安全属性**：`Set-Cookie: session_token=<token>; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=2592000`。`HttpOnly` 阻止 JS 读取（防 XSS 窃取）、`Secure` 仅 HTTPS、`SameSite=Lax` 兜住跨站 CSRF。token 为不可猜的随机串，本身不含用户信息。
 
-### 3.2 Telegram 绑定
+### 3.2 账号绑定（链接式，仅 Telegram 发起）
+
+> **设计原则**：绑定流程**只存在于 Telegram 内**——用户在 TG 输入邮箱，系统给该邮箱发**验证链接**，点击即把该 TG 账号的数据并入邮箱账号。**PWA 完全不出现"Telegram"字样**：纯 PWA 用户无需知道 Telegram 的存在，这才是好应用。（早期"TG 发 6 位码 → PWA 设置页输码"的设计把两端耦合了，已废弃。）
 
 ```
-User                   Telegram Bot           Worker              PWA Session         D1
- │                         │                    │                     │                │
- │ /bind me@example.com    │                    │                     │                │
- │────────────────────────►│                    │                     │                │
- │                         │ 生成6位验证码      │                     │                │
- │                         │ 存 bind_code:xxx   │                     │                │
- │                         │── KV ─────────────►│                     │                │
- │                         │                    │                     │                │
- │                         │ 发邮件含验证码     │                     │                │
- │                         │── Resend ─────────►│                     │                │
- │                         │                    │                     │                │
- │  ✉️ 收到验证码          │                    │                     │                │
- │                         │                    │                     │                │
- │  在 PWA 验证页输入码    │                    │                     │                │
- │─────────────────────────│────────────────────│────────────────────►│                │
- │                         │                    │ POST /auth/bind     │                │
- │                         │                    │ { email, code }     │                │
- │                         │                    │◄────────────────────│                │
- │                         │                    │                     │                │
- │                         │                    │ 校验 code → 匹配    │                │
- │                         │                    │ UPDATE users SET    │                │
- │                         │                    │ telegram_id=xxx     │                │
- │                         │                    │ WHERE email=yyy     │                │
- │                         │                    │────────────────────►│                │
- │                         │                    │                     │                │
- │                         │   ✅ 绑定成功      │                     │                │
- │                         │◄───────────────────│                     │                │
+User                   Telegram Bot           Worker / Email           D1
+ │                         │                    │                       │
+ │ /bind me@example.com    │                    │                       │
+ │────────────────────────►│                    │                       │
+ │                         │ token→KV bind_link │                       │
+ │                         │── Resend 发链接 ──►│                       │
+ │  ✉️ 收到验证链接        │                    │                       │
+ │                         │                    │                       │
+ │ 点击链接                │                    │                       │
+ │  GET /auth/bind?token=  │（确认页，不消费，防预取）                  │
+ │ 点"确认绑定"            │                    │                       │
+ │  POST /auth/bind        │                    │                       │
+ │────────────────────────────────────────────►│ 消费 token            │
+ │                         │                    │ get-or-create 邮箱账号 │
+ │                         │                    │ 合并 TG 数据(情形B)───►│
+ │                         │                    │ 建 session            │
+ │  302 → /chat（已登录）  │◄───────────────────│                       │
 ```
 
-**绑定前置与账号合并**（`POST /auth/bind` 校验码通过后）：
+**关键点**：
+- **无需 PWA 输码**、PWA 零 Telegram 文案；点链接即完成，并顺带在浏览器登录（拿到 session）。
+- **邮箱账号无需预先存在**：点击时 `get-or-create`（邮箱是账号主键，TG 仅是数据来源），免去旧设计的"先注册再绑定"前置。
+- `GET /auth/bind` 只渲染确认页、不消费 token（防邮件安全网关预取，与 Magic Link 同款防御）；`POST` 才消费。
+- KV：`bind_link:{token}` = `{email, telegram_id, expiresAt}`，TTL 10 分钟。
 
-设 TG chat 为 `T`、目标邮箱账号为 `E`：
+**账号合并**（`POST /auth/bind` 消费后）。设 TG chat 为 `T`、目标邮箱账号为 `E`：
 
-1. **邮箱账号必须先存在**：`/bind <email>` 时若 `users` 无 `email=<email>` 行，回复"请先在 PWA 用该邮箱登录注册后再绑定"，不发码。避免 `UPDATE ... WHERE email=` 影响 0 行的静默失败。
-2. **目标邮箱已被别的 TG 绑定**：`E.telegram_id` 非空且 ≠ `T` → 拒绝，"该邮箱已绑定其他 Telegram"。
-3. **情形 A（较少）**：`T` 在 `users` 中无独立行 → 直接 `UPDATE users SET telegram_id=T WHERE email=E`。（开放自助下 TG 用户首次发消息已自动建号，故此情形仅见于"从未在 TG 发过消息、直接来 PWA 绑定"。）
-4. **情形 B（开放自助下的常见路径，账号合并）**：`T` 已有自己的 TG-only `users` 行 `U_t`（首次发消息时自动创建）且名下可能有数据 →
+1. **目标邮箱已被别的 TG 绑定**：`E.telegram_id` 非空且 ≠ `T` → 拒绝，确认页提示"该邮箱已绑定其他 Telegram"。
+2. **情形 A（较少）**：`T` 在 `users` 中无独立行 → 直接 `UPDATE users SET telegram_id=T WHERE email=E`。（开放自助下 TG 用户首次发消息已自动建号，故此情形罕见。）
+3. **情形 B（常见路径，账号合并）**：`T` 已有自己的 TG-only `users` 行 `U_t`（首次发消息时自动创建）且名下可能有数据 →
    - 先 `UPDATE users SET telegram_id=NULL WHERE id=U_t.id`（腾出 `telegram_id` 唯一约束）；
    - 把 `U_t` 名下数据改挂到 `E`：`UPDATE {vehicles,fuel_records,mileage_records,maintenance_records,reminders} SET user_id=E.id WHERE user_id=U_t.id`；
    - `UPDATE users SET status='merged' WHERE id=U_t.id`（失活，不物理删，可回溯）；

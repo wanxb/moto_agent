@@ -25,7 +25,9 @@ function clientIp(request: Request): string {
   return request.headers.get('CF-Connecting-IP') ?? 'unknown';
 }
 function baseUrl(request: Request, env: Env): string {
-  return (env.DASHBOARD_URL || new URL(request.url).origin).replace(/\/$/, '');
+  // DASHBOARD_URL 可能带 /dashboard 等路径，认证/绑定链接需要干净的 origin。
+  if (env.DASHBOARD_URL) { try { return new URL(env.DASHBOARD_URL).origin; } catch { /* 回退请求 origin */ } }
+  return new URL(request.url).origin;
 }
 function nowSec(): number {
   return Math.floor(Date.now() / 1000);
@@ -41,7 +43,8 @@ export async function handleAuthRequest(request: Request, env: Env): Promise<Res
   if (pathname === '/auth/verify'    && m === 'GET')  return verifyPage(request, env);
   if (pathname === '/auth/verify'    && m === 'POST') return verifyConsume(request, env);
   if (pathname === '/auth/logout'    && m === 'POST') return logout(request, env);
-  if (pathname === '/auth/bind'      && m === 'POST') return bind(request, env);
+  if (pathname === '/auth/bind'      && m === 'GET')  return bindPage(request, env);
+  if (pathname === '/auth/bind'      && m === 'POST') return bindConsume(request, env);
   return json(404, { error: 'not_found' });
 }
 
@@ -127,29 +130,59 @@ async function logout(request: Request, env: Env): Promise<Response> {
   });
 }
 
-// ── POST /auth/bind —— 校验绑定码 → bindTelegramToUser（含合并）─────────────────
+// ── 账号绑定（链接式，仅 Telegram 发起）──────────────────────────────────────────
+// 流程：TG /bind <email> → 邮件验证链接 → 用户点击 → 确认页(防预取) → POST 消费 →
+//       get-or-create 邮箱账号 → 把该 TG 账号数据合并进来 → 建 session → 302 /chat。
+// PWA 完全不参与；纯 PWA 用户无需知道 Telegram 存在。
 
-async function bind(request: Request, env: Env): Promise<Response> {
-  const body = await request.json().catch(() => ({})) as { email?: string; code?: string };
-  const email = (body.email || '').trim().toLowerCase();
-  const code = (body.code || '').trim();
-  if (!EMAIL_RE.test(email) || !code) return json(400, { error: 'invalid_input' });
+// GET /auth/bind?token= —— 仅渲染确认页，不消费 token（防邮件网关预取）。
+async function bindPage(request: Request, env: Env): Promise<Response> {
+  const token = new URL(request.url).searchParams.get('token') || '';
+  const rec = await readBindLink(env, token);
+  if (!rec) return html(410, page('链接已失效', '此绑定链接已过期或已被使用，请回到 Telegram 重新发送 /bind。'));
 
-  const rl = await checkRateLimit(env.SESSION_KV, `auth:bind:${email}:${clientIp(request)}`, RULES['auth:send']);
-  if (!rl.allowed) return json(429, { error: 'rate_limited' });
+  return html(200, `<!DOCTYPE html><html lang="zh"><head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>确认绑定 · Moto Bot</title>${STYLE}</head>
+<body><div class="card">
+<h1>🏍 确认绑定账号</h1>
+<p>点击下方按钮，将你的记录绑定到 <b>${escapeHtml(rec.email)}</b>。</p>
+<form method="POST" action="/auth/bind">
+<input type="hidden" name="token" value="${escapeHtml(token)}">
+<button type="submit">确认绑定</button>
+</form>
+</div></body></html>`);
+}
 
-  const raw = await env.SESSION_KV.get(`bind_code:${email}`);
-  if (!raw) return json(400, { error: 'code_expired' });
-  const rec = JSON.parse(raw) as { code: string; telegram_id: string };
-  if (rec.code !== code) return json(400, { error: 'code_mismatch' });
+// POST /auth/bind —— 消费一次性 token → get-or-create 邮箱账号 → 合并 TG 数据 → session → 302。
+async function bindConsume(request: Request, env: Env): Promise<Response> {
+  const form = await request.formData().catch(() => null);
+  const token = form ? String(form.get('token') ?? '') : '';
+
+  const rec = await readBindLink(env, token);
+  if (!rec) return html(410, page('链接已失效', '此绑定链接已过期或已被使用，请回到 Telegram 重新发送 /bind。'));
+  await env.SESSION_KV.delete(`bind_link:${token}`);   // 一次性消费
+
+  // 邮箱账号不存在则创建（邮箱是账号主键，TG 仅是数据来源）
+  let user = await getUserByEmail(env.DB, rec.email);
+  if (!user) {
+    const id = await createUser(env.DB, { email: rec.email });
+    user = await getUserById(env.DB, id);
+  }
+  if (!user) return html(500, page('绑定失败', '账号创建异常，请稍后重试。'));
 
   try {
-    const res = await bindTelegramToUser(env.DB, email, rec.telegram_id);
-    await env.SESSION_KV.delete(`bind_code:${email}`);
-    return json(200, { ok: true, merged: res.merged });
+    await bindTelegramToUser(env.DB, rec.email, rec.telegram_id);   // 含账号合并（情形 B）
   } catch (e) {
-    return json(400, { error: 'bind_failed', message: e instanceof Error ? e.message : '绑定失败' });
+    return html(400, page('绑定失败', e instanceof Error ? e.message : '绑定失败，请稍后重试。'));
   }
+
+  await updateUserLastLogin(env.DB, user.id, new Date().toISOString());
+  const sToken = await createSession(env.SESSION_KV, { user_id: user.id, email: user.email });
+  return new Response(null, {
+    status: 302,
+    headers: { Location: `${baseUrl(request, env)}/chat`, 'Set-Cookie': buildSessionCookie(sToken) },
+  });
 }
 
 // ── helpers ───────────────────────────────────────────────────────────────────
@@ -160,6 +193,16 @@ async function readMagicLink(env: Env, token: string): Promise<{ email: string; 
   const raw = await env.SESSION_KV.get(`magic_link:${token}`);
   if (!raw) return null;
   const rec = JSON.parse(raw) as { email: string; expiresAt: number };
+  if (rec.expiresAt && nowSec() >= rec.expiresAt) return null;
+  return rec;
+}
+
+/** 读 bind_link 并做防御性过期校验。不删除。 */
+async function readBindLink(env: Env, token: string): Promise<{ email: string; telegram_id: string; expiresAt: number } | null> {
+  if (!token) return null;
+  const raw = await env.SESSION_KV.get(`bind_link:${token}`);
+  if (!raw) return null;
+  const rec = JSON.parse(raw) as { email: string; telegram_id: string; expiresAt: number };
   if (rec.expiresAt && nowSec() >= rec.expiresAt) return null;
   return rec;
 }

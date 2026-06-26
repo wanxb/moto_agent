@@ -21,12 +21,11 @@ export const en: Record<string, string> = {
   'general.rate_limit': 'Too many messages. Please wait {0}s 🕐',
   'general.no_voice_text': "Didn't catch that. Please speak again or type.",
 
-  // ── Telegram binding (spec 016) ──
-  'bind.usage': 'Usage: /bind your@email.com (register that email in the PWA first)',
-  'bind.email_not_found': "That email isn't registered yet. Sign up with it in the PWA first, then /bind here.",
+  // ── Account binding (spec 016, Telegram-initiated, link-based) ──
+  'bind.usage': 'Usage: /bind your@email.com',
   'bind.rate_limited': 'Too many attempts, please try again later 🕐',
-  'bind.mail_failed': 'Failed to send the code email, please retry.',
-  'bind.code_sent': '✅ A code was sent to {0}. Enter it on the PWA settings page to finish binding (valid for 10 min).',
+  'bind.mail_failed': 'Failed to send the verification link, please retry.',
+  'bind.link_sent': '✅ A verification link was sent to {0}. Click it to finish binding (valid for 10 min).',
 
   // ── Attribute labels ──
   'attr.brand': 'Brand',

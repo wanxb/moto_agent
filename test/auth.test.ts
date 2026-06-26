@@ -3,7 +3,10 @@ import { env } from 'cloudflare:test';
 import worker from '../src/index';
 import { handleAuthRequest } from '../src/routes/auth-handler';
 import { getSession, createSession, parseSessionToken } from '../src/services/session';
-import { getUserByEmail, getUserByTelegramId, createUser } from '../src/database';
+import {
+  getUserByEmail, getUserById, createUser,
+  insertFuelRecord, getRecentFuelRecords,
+} from '../src/database';
 import type { Env } from '../src/types';
 import { initDB, clearDB } from './utils';
 
@@ -147,32 +150,45 @@ describe('POST /auth/logout', () => {
   });
 });
 
-// ── bind ──────────────────────────────────────────────────────────────────────
+// ── bind（链接式，仅 TG 发起）──────────────────────────────────────────────────
 
-describe('POST /auth/bind', () => {
-  it('binds telegram_id with a valid code', async () => {
-    await createUser(env.DB, { email: 'g@x.com' });
-    await env.SESSION_KV.put('bind_code:g@x.com', JSON.stringify({ code: '123456', telegram_id: '777' }));
+const future = () => Math.floor(Date.now() / 1000) + 600;
 
-    const res = await handleAuthRequest(jsonReq('POST', '/auth/bind', { email: 'g@x.com', code: '123456' }), E);
+describe('GET/POST /auth/bind (link-based)', () => {
+  it('GET renders confirm page WITHOUT consuming the token', async () => {
+    await env.SESSION_KV.put('bind_link:btok1', JSON.stringify({ email: 'g@x.com', telegram_id: '777', expiresAt: future() }));
+    const res = await handleAuthRequest(new Request('https://test.dev/auth/bind?token=btok1'), E);
     expect(res.status).toBe(200);
-    expect(await res.json()).toMatchObject({ ok: true, merged: false });
-    expect((await getUserByTelegramId(env.DB, '777'))!.email).toBe('g@x.com');
-    // 验证码已消费
-    expect(await env.SESSION_KV.get('bind_code:g@x.com')).toBeNull();
+    expect(await res.text()).toContain('确认绑定');
+    expect(await env.SESSION_KV.get('bind_link:btok1')).not.toBeNull();   // 未消费
   });
 
-  it('rejects a wrong code', async () => {
-    await createUser(env.DB, { email: 'h@x.com' });
-    await env.SESSION_KV.put('bind_code:h@x.com', JSON.stringify({ code: '123456', telegram_id: '777' }));
-    const res = await handleAuthRequest(jsonReq('POST', '/auth/bind', { email: 'h@x.com', code: '000000' }), E);
-    expect(res.status).toBe(400);
+  it('POST creates email account, merges TG data, sets session, consumes token', async () => {
+    // 先有一个 TG-only 账号且名下有数据（开放自助下首次发消息自动建的那种）
+    const tgUser = await createUser(env.DB, { telegramId: '888' });
+    await insertFuelRecord(env.DB, { date: '2026-06-01', odometer: 100, liters: 5, price_total: 50, user_id: tgUser });
+    await env.SESSION_KV.put('bind_link:btok2', JSON.stringify({ email: 'merge@x.com', telegram_id: '888', expiresAt: future() }));
+
+    const res = await handleAuthRequest(formReq('/auth/bind', { token: 'btok2' }), E);
+    expect(res.status).toBe(302);
+    expect(res.headers.get('Location')).toBe('https://test.dev/chat');
+
+    // 邮箱账号已建并挂上 telegram_id
+    const emailUser = await getUserByEmail(env.DB, 'merge@x.com');
+    expect(emailUser!.telegram_id).toBe('888');
+    // TG 名下数据已并入邮箱账号
+    expect((await getRecentFuelRecords(env.DB, 10, undefined, emailUser!.id)).length).toBe(1);
+    // 旧 TG-only 账号失活
+    expect((await getUserById(env.DB, tgUser))!.status).toBe('merged');
+    // session 有效 + token 已消费
+    const cookie = res.headers.get('Set-Cookie') || '';
+    expect((await getSession(env.SESSION_KV, parseSessionToken(cookie)!))!.email).toBe('merge@x.com');
+    expect(await env.SESSION_KV.get('bind_link:btok2')).toBeNull();
   });
 
-  it('rejects when no code was issued', async () => {
-    await createUser(env.DB, { email: 'i@x.com' });
-    const res = await handleAuthRequest(jsonReq('POST', '/auth/bind', { email: 'i@x.com', code: '123456' }), E);
-    expect(res.status).toBe(400);
+  it('rejects an unknown/expired token', async () => {
+    const res = await handleAuthRequest(formReq('/auth/bind', { token: 'nope' }), E);
+    expect(res.status).toBe(410);
   });
 });
 

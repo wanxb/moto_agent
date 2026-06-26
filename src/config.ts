@@ -40,8 +40,8 @@ export const RATE_LIMIT_AUTH = 5;
 // ── 多用户认证（spec 016）─────────────────────────────────────────────────────
 /** Magic Link token TTL（秒，15 分钟） */
 export const MAGIC_LINK_TTL = 900;
-/** Telegram 绑定验证码 TTL（秒，10 分钟） */
-export const BIND_CODE_TTL = 600;
+/** 账号绑定验证链接 token TTL（秒，10 分钟） */
+export const BIND_LINK_TTL = 600;
 /** 登录 Session TTL（秒，30 天） */
 export const AUTH_SESSION_TTL = 2592000;
 /** Session 滑动续期阈值（秒，7 天）：剩余 TTL 低于此值则续期到满 */

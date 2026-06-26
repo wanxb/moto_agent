@@ -21,12 +21,11 @@ export const zh: Record<string, string> = {
   'general.rate_limit': '消息有点频繁，请等 {0} 秒再发 🕐',
   'general.no_voice_text': '没听清，请再说一遍或直接打字。',
 
-  // ── Telegram 绑定（spec 016）──
-  'bind.usage': '用法：/bind 你的邮箱（需先在 PWA 用该邮箱注册）',
-  'bind.email_not_found': '该邮箱还没注册。请先在 PWA 用它登录注册后，再回来 /bind 绑定。',
+  // ── 账号绑定（spec 016，仅 TG 发起，链接式）──
+  'bind.usage': '用法：/bind 你的邮箱',
   'bind.rate_limited': '操作太频繁，请稍后再试 🕐',
-  'bind.mail_failed': '验证码邮件发送失败，请稍后重试。',
-  'bind.code_sent': '✅ 验证码已发送到 {0}，请在 PWA 设置页输入完成绑定（10 分钟内有效）。',
+  'bind.mail_failed': '验证链接发送失败，请稍后重试。',
+  'bind.link_sent': '✅ 验证链接已发送到 {0}，点击邮件中的链接完成绑定（10 分钟内有效）。',
 
   // ── 属性标签 ──
   'attr.brand': '品牌',
