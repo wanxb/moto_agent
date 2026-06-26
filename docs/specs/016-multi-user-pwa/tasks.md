@@ -116,18 +116,18 @@
 
 ### T8 登录页 + 设置页（Svelte 路由）
 
-- [ ] **T8.1** `web/src/routes/Login.svelte`：
+- [x] **T8.1** `web/src/routes/Login.svelte`（T5-C 已建，本期沿用）：
   - 品牌 Logo + 邮箱输入框 + "发送登录链接"（`POST /auth/send-link`）+ 使用说明
   - 发送成功态："邮件已发送，请检查收件箱"
-  - 链接过期/错误态
-  - 绑定验证码输入（6 位码 → `POST /auth/bind`）
   - 注：`GET /auth/verify` 确认页是 Worker 返回的最小服务端 HTML（防预取），**不在 SPA 内**
-- [ ] **T8.2** `web/src/routes/Settings.svelte`：
+  - **决策**：绑定验证码输入移到 Settings（登录态下才合理，邮箱自动取自 `/api/v1/me`），不放 Login
+- [x] **T8.2** `web/src/routes/Settings.svelte`：
   - 当前用户信息（邮箱、绑定状态，来自 `/api/v1/me`）
-  - 语言切换（中/英）
-  - Telegram 绑定状态 + 解绑按钮
-  - 登出按钮（`POST /auth/logout`）
-  - 验证：正确显示用户信息；语言切换立即生效
+  - 语言切换（中/英）：即时切 UI（localStorage）+ 持久化到 `users.lang`（新增 `POST /api/v1/me {lang}`，否则对话回复语言与 UI 不一致）
+  - Telegram 绑定：未绑定 → 6 位验证码输入 `POST /auth/bind`，成功后刷新状态；已绑定 → 显示状态
+  - **解绑暂不开放**（无后端端点，显示提示文案而非假按钮，留后续）
+  - 登出按钮（`POST /auth/logout` → 跳 `/login`）
+  - 验证：正确显示用户信息；语言切换即时生效并持久化
 
 ### T9 PWA manifest + 安装支持
 

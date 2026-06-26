@@ -2,7 +2,7 @@
 // 数据来源：现有 database.ts 函数，加少量直查 SQL。
 
 import { getFuelRecordsByDateRange, getMaintenanceRecords } from '../database';
-import { getActiveReminders, getUserById } from '../database';
+import { getActiveReminders, getUserById, updateUserLang } from '../database';
 import { resolveSessionFromRequest } from '../services/session';
 import type { FuelRecord, MaintenanceRecord } from '../types';
 
@@ -29,10 +29,18 @@ export async function handleApiRequest(request: Request, env: { DB: D1Database; 
   const url = new URL(request.url);
   const json = (data: unknown) => new Response(JSON.stringify(data), { status: 200, headers: CORS_HEADERS });
 
-  // /api/v1/me：当前登录用户（session cookie 鉴权，不走 ?token=）。前端用它判登录态。
+  // /api/v1/me：当前登录用户（session cookie 鉴权，不走 ?token=）。GET 读、POST 改语言。
   if (url.pathname === '/api/v1/me') {
     const session = await resolveSessionFromRequest(request, env.SESSION_KV);
     if (!session) return new Response(JSON.stringify({ error: 'unauthorized' }), { status: 401, headers: CORS_HEADERS });
+
+    if (request.method === 'POST') {
+      const body = (await request.json().catch(() => ({}))) as { lang?: string };
+      if (body.lang !== 'zh' && body.lang !== 'en') return new Response(JSON.stringify({ error: 'invalid_lang' }), { status: 400, headers: CORS_HEADERS });
+      await updateUserLang(env.DB, session.user_id, body.lang);
+      return json({ ok: true });
+    }
+
     const user = await getUserById(env.DB, session.user_id);
     if (!user) return new Response(JSON.stringify({ error: 'unauthorized' }), { status: 401, headers: CORS_HEADERS });
     return json({ user: { id: user.id, email: user.email, telegram_id: user.telegram_id, nickname: user.nickname, lang: user.lang, is_admin: user.is_admin } });

@@ -216,8 +216,10 @@ export default {
         return new Response('pong ' + (env.ALLOWED_CHAT_ID ? 'ok' : 'no-token'), { status: 200, headers: { 'Content-Type': 'text/plain' } });
       }
 
-      // ── Dashboard API (read-only, token auth) ─────────────────────────────
-      if (url.pathname.startsWith('/api/v1/') && request.method === 'GET') {
+      // ── Dashboard / 用户 API ──────────────────────────────────────────────
+      // 只读端点走 GET；/api/v1/me 额外支持 POST（更新语言偏好，session 鉴权）。
+      if (url.pathname.startsWith('/api/v1/') &&
+          (request.method === 'GET' || (url.pathname === '/api/v1/me' && request.method === 'POST'))) {
         return handleApiRequest(request, env);
       }
 

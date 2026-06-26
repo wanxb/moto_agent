@@ -36,6 +36,11 @@ export async function updateUserLastLogin(db: D1Database, id: number, when: stri
   await db.prepare('UPDATE users SET last_login = ? WHERE id = ?').bind(when, id).run();
 }
 
+// 更新用户语言偏好（PWA 设置页切换 → 影响对话回复语言，因 chat-api 按 users.lang 取语言）。
+export async function updateUserLang(db: D1Database, id: number, lang: 'zh' | 'en'): Promise<void> {
+  await db.prepare('UPDATE users SET lang = ? WHERE id = ?').bind(lang, id).run();
+}
+
 // 开放自助（spec 016 修订：去掉白名单门控）：TG 用户首次发消息即自动建号，返回其 user_id。
 // email 留空（邮箱是另一条注册入口）；之后可经 /bind 合并到邮箱账号。
 export async function getOrCreateTelegramUser(
