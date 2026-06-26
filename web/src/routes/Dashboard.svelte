@@ -20,7 +20,7 @@
 
   let vehicles = $state<Vehicle[]>([]);
   let currentVehicle = $state('');
-  let days = $state(90);
+  let days = $state(30);
   let stats = $state<Stats | null>(null);
   let fuel = $state<Paged<FuelItem> | null>(null);
   let maint = $state<Paged<MaintItem> | null>(null);
