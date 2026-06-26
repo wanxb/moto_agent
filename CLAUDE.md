@@ -10,10 +10,10 @@
 
 **摩托车油耗管理 Telegram Bot。** 用户用自然语言在 Telegram 里记录加油（里程、升数、价格），系统通过 LLM 解析后写入数据库并计算油耗，支持查询统计。
 
-- **形态**：Telegram Bot（webhook 模式），无前端页面。
+- **形态**：Telegram Bot（webhook 模式）+ **多用户 PWA**（`web/` Svelte SPA，经 `[assets]` 托管，spec 016）。
 - **运行时**：Cloudflare Workers（边缘 Serverless，单请求无状态）。
 - **AI**：自实现 Agent Loop（`while` 循环 + 工具调度），DeepSeek V3 主、Claude Sonnet 备，自动 fallback。
-- **状态**：MVP 已跑通，205 个测试通过。Phase 2 功能扩展已全部完成，进入 Phase 3 多用户规划。
+- **状态**：MVP + Phase 2 已完成。Phase 3 **多用户 PWA（spec 016）已落地**：邮箱 Magic Link 认证、Telegram 开放自助、对话/语音/仪表盘 Web 界面、数据按 `user_id` 隔离。287 个测试通过（待部署，见 spec 016 tasks T13.8）。
 
 完整背景：[`docs/PRD.md`](docs/PRD.md) · [`docs/engineering/architecture.md`](docs/engineering/architecture.md)
 
@@ -34,20 +34,29 @@
 ## 3. 常用命令
 
 ```bash
-npm install              # 安装依赖
-npm run dev              # 本地启动 Worker（wrangler dev）
-npm test                 # 跑全部测试（vitest run，当前 205 个）
+npm install              # 安装依赖（Worker）
+npm run dev              # 本地启动 Worker（wrangler dev，同时经 [assets] 托管 web/dist）
+npm test                 # 跑全部测试（vitest run，当前 287 个）
 npm run test:watch       # 监听模式
 npm run type-check       # tsc --noEmit，类型检查
 npm run db:init          # 初始化本地 D1（docs/schema.sql）
 npm run db:init:remote   # 初始化线上 D1
-npm run deploy           # 部署到 Cloudflare Workers
+npm run deploy           # 部署到 Cloudflare Workers（含 web/dist 静态资源）
 npm run ingest-knowledge  # 知识库入库（OCR → 分块）
 npm run populate-vectorize # 知识库向量索引灌入
 npm run test-knowledge    # 离线评测知识库检索质量
+
+# 前端 PWA（web/ 子项目，Vite + Svelte，spec 016）
+npm --prefix web install         # 安装前端依赖（首次）
+npm --prefix web run build       # 构建 → web/dist（部署前必跑；dist 已 gitignore）
+npm --prefix web run check       # svelte-check 类型检查
+node scripts/make-icons.mjs      # 生成 PWA 图标（需改图标时）
+
+# 存量数据迁移（spec 016，迁移 0009 之后跑一次）
+npx tsx scripts/migrate-single-user.ts <chatId> [--local]   # 回填管理员 user_id（幂等）
 ```
 
-> 没有独立的 lint/format 命令；`tsc --strict` 是唯一的静态门禁。提交前至少跑 `type-check` + `test`。
+> 没有独立的 lint/format 命令；`tsc --strict`（Worker）+ `svelte-check`（web/）是静态门禁。提交前至少跑 `type-check` + `test`；动了 `web/` 还要 `npm --prefix web run build`。
 
 部署 / Webhook 注册 / Secrets 配置的完整流程见 [`docs/engineering/observability-ops.md`](docs/engineering/observability-ops.md) 与 [`README.md`](README.md)。
 
@@ -69,11 +78,15 @@ npm run test-knowledge    # 离线评测知识库检索质量
 | `src/router/` | 分层模型路由：`classifier.ts`（启发式复杂度判定）、`router-llm.ts`（`RouterLLM` 实现 `ILLMProvider`） | 对 agent.ts 透明；规则：宁多花钱不降质量 |
 | `src/tools/` | 工具系统：`interface.ts`(Tool 接口+Registry)、`index.ts`(注册)、`fuel-tools.ts`、`vehicle-tools.ts` 等 | **新增能力的主战场**，见 §5；工具 `execute` 接受 `lang` 参数 |
 | `src/llm-transport.ts` | 双 provider 底层：callDeepSeek / callAnthropic / 消息格式互转 / 重试 | 两条路径都要测；fallback 触发条件见注释 |
-| `src/database.ts` | D1 数据访问层（纯 SQL，无业务逻辑） | 业务计算放 `src/tools/`，这里只做 CRUD |
-| `src/types.ts` | 全局类型：`Env`、`Message`、工具/LLM 接口、`FuelRecord`、`Vehicle` | 改 Env 要同步 `wrangler.toml` 和 `test/utils.ts` |
+| `src/database.ts` | D1 数据访问层（纯 SQL，无业务逻辑）；含用户 CRUD + `user_id` 隔离（spec 016） | 业务计算放 `src/tools/`，这里只做 CRUD；读写带可选 `userId` 过滤 |
+| `src/routes/auth-handler.ts` | 认证路由：Magic Link 登录、登出、账号绑定（链接式，仅 TG 发起） | 防预取：GET 渲染确认页、POST 才消费 token |
+| `src/routes/chat-api.ts` | PWA 对话后端：`/chat/api`(对话+历史)、`/chat/voice`(语音)；session 鉴权 + 注入 `user_id` | 历史存 `session:pwa:{user_id}` |
+| `src/services/{mail,session}.ts` | Resend 发信 / session 签发校验滑动续期（spec 016） | secret 走 `wrangler secret put` |
+| `src/migrate.ts` | 存量数据迁移逻辑 `migrateSingleUser`（CLI 见 `scripts/migrate-single-user.ts`） | 幂等；保留 `reminders.chat_id` |
+| `src/types.ts` | 全局类型：`Env`、`Message`、工具/LLM 接口、`FuelRecord`、`Vehicle`、`User` | 改 Env 要同步 `wrangler.toml` 和 `test/utils.ts` |
 | `src/i18n/` | 国际化：`zh.ts`/`en.ts` 字典、`t()` 翻译、`fmtNumber/fmtKm/fmtCost`、`getLang/setLang` | 新增用户文字必须进字典；支持 `{0}` 占位参数 |
 | `src/prompts.ts` | 系统提示词：`buildSystemPrompt(lang)` 中英双语 | 改提示词要同步更新两个语言版本 |
-| `src/scheduled.ts` | Cron 定时任务：到期提醒扫描 + 推送 + 自动续期 | 推送文案目前默认中文（cron 无用户上下文） |
+| `src/scheduled.ts` | Cron 定时任务：到期提醒扫描 + 推送 + 自动续期 | 多用户化（spec 016 T10B）：目标按属主 telegram_id 回退、文案随属主 `users.lang`、有属主绝不回退 ALLOWED_CHAT_ID |
 | `src/stt.ts` | 语音转文字：Cloudflare Workers AI Whisper | `language` 参数跟随用户语言偏好 |
 | `src/format.ts` | Markdown → 纯文本清洗 | Telegram 回复前调用 |
 | `docs/schema.sql` | D1 建表脚本 | 改 schema 必须走迁移流程，见 [`docs/engineering/data-model.md`](docs/engineering/data-model.md) |
@@ -115,7 +128,7 @@ npm run test-knowledge    # 离线评测知识库检索质量
 - **模块**：ESM，命名导出为主；`src/index.ts` 默认导出 Workers handler。
 - **命名**：函数/变量 `camelCase`，类型/接口 `PascalCase`，SQL 列名 `snake_case`（与 DB 一致）。
 - **错误处理**：工具执行失败要 `try/catch` 并返回**人类可读的中文错误字符串**给 LLM，不要让异常冒泡中断 Loop（参考 `agent.ts` 现有写法）。
-- **用户可见文案**：中文，简洁，沿用现有 emoji 风格（✅ ⛽ 📊 🕐）。
+- **用户可见文案**：**一律走 i18n**（`t('key', lang, ...args)`，zh/en 成对进字典），**禁止在代码里写死中文或内联 `lang === 'en' ? ... : ...`**。简洁，沿用 emoji 风格（✅ ⛽ 📊 🕐）。例外：工具 `description`（给 LLM 读的 schema，可用 `descriptionEn`）、`prompts.ts`（已 buildZh/buildEn 双语）、内部 `throw Error`（不直接示人）。前端 `web/` 用 `web/src/lib/i18n.ts`。
 - **日志**：`console.log('[模块] ...')` 前缀化（如 `[tool]`、`[llm]`、`[worker]`），Workers 会收集到 Logpush。
 - **注释**：解释"为什么"，与现有密度一致；不写废话注释。
 - 详细规范见 [`docs/process/coding-standards.md`](docs/process/coding-standards.md)。
@@ -125,10 +138,10 @@ npm run test-knowledge    # 离线评测知识库检索质量
 ## 7. 约束与护栏（务必遵守）
 
 - **Workers 执行限制**：单请求有 wall-time 上限。Agent Loop 用 `MAX_ROUNDS` 兜底，**不要**做长耗时同步计算或大循环。
-- **不引入重依赖**：当前生产依赖只有 `grammy`。新增 npm 包前先确认能在 Workers 运行时（无 Node fs/net 完整 API，`nodejs_compat` 有限）跑通，并在 PR 说明理由。
-- **不擅自迁移基础设施**：留在 Cloudflare 生态（Workers/D1/KV/Cron/Pages）。换存储/换 provider 属于架构决策，要先写 ADR（见 [`docs/engineering/adr/`](docs/engineering/adr/)）。
+- **不引入重依赖（Worker）**：Worker 生产依赖只有 `grammy`。新增 npm 包前先确认能在 Workers 运行时（无 Node fs/net 完整 API，`nodejs_compat` 有限）跑通，并在 PR 说明理由。**`web/` 子项目的 devDeps（vite/svelte/chart.js）不算 Worker 生产依赖**——它们只在构建期用，产物是静态资源，不进 Worker bundle。
+- **不擅自迁移基础设施**：留在 Cloudflare 生态（Workers/D1/KV/Cron/Pages/Assets）。换存储/换 provider 属于架构决策，要先写 ADR（见 [`docs/engineering/adr/`](docs/engineering/adr/)）。
 - **Schema 向上兼容**：只加列/加表，不删不改类型，保护历史数据（见 [`docs/engineering/data-model.md`](docs/engineering/data-model.md)）。
-- **隐私与权限**：默认单用户（`ALLOWED_CHAT_ID` 白名单）。任何放开多用户的改动必须先过 [`docs/engineering/security.md`](docs/engineering/security.md) 的数据隔离设计。
+- **隐私与权限（多用户，spec 016）**：已开放多用户——Telegram 开放自助、PWA 邮箱认证，数据按 `user_id` 隔离。**新读写路径必须带 `user_id` 过滤/落库**，缺失即越权；改鉴权/隔离先过 [`docs/engineering/security.md`](docs/engineering/security.md)。
 - **不做的事**：不删用户数据、不改 git 历史、未经要求不 `git push`、不动 `wrangler.toml` 里的 `database_id`/`kv id`。
 
 ---

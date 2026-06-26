@@ -6,10 +6,23 @@
 
 ## 1. 当前 Schema
 
-> 含 spec 001 多车管理（`vehicles` 表 + 记录表 `vehicle_id`）。以 `docs/schema.sql` 为准。
+> 含 spec 001 多车管理（`vehicles` 表 + 记录表 `vehicle_id`）与 spec 016 多用户（`users` 表 + 各表 `user_id`）。以 `docs/schema.sql` 为准。
 
 ```sql
--- 车辆（spec 001）
+-- 用户（spec 016 多用户）：邮箱 + Telegram 双入口；email/telegram_id 各自 UNIQUE 可空。
+CREATE TABLE users (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    email       TEXT    UNIQUE,                 -- PWA 注册入口（Magic Link）
+    telegram_id TEXT    UNIQUE,                 -- Telegram 入口（开放自助自动建号）
+    nickname    TEXT,
+    lang        TEXT    NOT NULL DEFAULT 'zh',  -- 偏好语言（影响对话/cron 文案）
+    is_admin    INTEGER NOT NULL DEFAULT 0,
+    status      TEXT    NOT NULL DEFAULT 'active', -- active | merged（账号合并后失活）
+    created_at  TEXT    NOT NULL DEFAULT (datetime('now')),
+    last_login  TEXT
+);
+
+-- 车辆（spec 001；spec 016 加 user_id 归属）
 CREATE TABLE vehicles (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
     name        TEXT    NOT NULL,               -- 车名，如"Honda NS125LA"
@@ -21,7 +34,7 @@ CREATE TABLE vehicles (
     color       TEXT,                           -- 车身颜色（spec 011）
     is_default  INTEGER NOT NULL DEFAULT 0,     -- 1=默认车（同一时刻仅一辆）
     is_active   INTEGER NOT NULL DEFAULT 1,     -- 软删除预留
-    user_id     INTEGER,                        -- Phase 3 多用户预留
+    user_id     INTEGER,                        -- 所属用户（spec 016，存量数据迁移回填）
     created_at  TEXT    NOT NULL DEFAULT (datetime('now'))
 );
 
@@ -36,6 +49,7 @@ CREATE TABLE fuel_records (
     note        TEXT,
     vehicle_id  INTEGER,                    -- 所属车辆（spec 001，存量数据可空）
     deleted_at  TEXT,                       -- 软删除时刻（spec 004，NULL=活跃）
+    user_id     INTEGER,                    -- 所属用户（spec 016）
     created_at  TEXT    NOT NULL DEFAULT (datetime('now'))
 );
 
@@ -46,6 +60,7 @@ CREATE TABLE mileage_records (
     odometer    REAL    NOT NULL,
     note        TEXT,
     vehicle_id  INTEGER,                    -- 所属车辆（spec 001）
+    user_id     INTEGER,                    -- 所属用户（spec 016）
     created_at  TEXT    NOT NULL DEFAULT (datetime('now'))
 );
 
@@ -59,6 +74,7 @@ CREATE TABLE maintenance_records (
     note        TEXT,
     vehicle_id  INTEGER,                    -- 所属车辆（spec 001）
     deleted_at  TEXT,                       -- 软删除时刻（spec 017，NULL=活跃）
+    user_id     INTEGER,                    -- 所属用户（spec 016）
     created_at  TEXT    NOT NULL DEFAULT (datetime('now'))
 );
 
@@ -72,7 +88,8 @@ CREATE TABLE reminders (
     trigger_date     TEXT,                   -- 日期模式 ISO 日期
     interval_km      REAL,                   -- 里程续期间隔（spec 006，NULL=一次性）
     note             TEXT,
-    chat_id          TEXT,                   -- 推送目标（空→ ALLOWED_CHAT_ID）
+    chat_id          TEXT,                   -- 推送目标（cron）；空→属主 telegram_id→ALLOWED_CHAT_ID（spec 016 T10B）
+    user_id          INTEGER,                -- 所属用户（spec 016；chat_id 仍为推送目标，不被覆盖）
     status           TEXT    NOT NULL DEFAULT 'active',  -- active | done
     fired_at         TEXT,
     created_at       TEXT    NOT NULL DEFAULT (datetime('now'))
@@ -83,6 +100,12 @@ CREATE INDEX idx_fuel_odometer   ON fuel_records(odometer);
 CREATE INDEX idx_fuel_vehicle    ON fuel_records(vehicle_id);
 CREATE INDEX idx_mileage_vehicle ON mileage_records(vehicle_id);
 CREATE INDEX idx_vehicles_default ON vehicles(is_default);
+-- 多用户隔离索引（spec 016，迁移 0009）
+CREATE INDEX idx_fuel_user        ON fuel_records(user_id);
+CREATE INDEX idx_mileage_user     ON mileage_records(user_id);
+CREATE INDEX idx_maint_user       ON maintenance_records(user_id);
+CREATE INDEX idx_reminders_user   ON reminders(user_id);
+CREATE INDEX idx_vehicles_user    ON vehicles(user_id);
 ```
 
 > `vehicle_id` 可空：存量（pre-001）记录经 [迁移 0001](../../migrations/0001_multi_vehicle.sql) 回填到默认车；无任何车辆时记录保持 `vehicle_id=NULL`，按单车模式工作（[agent-design §2](agent-design.md)）。
@@ -130,8 +153,14 @@ CREATE INDEX idx_vehicles_default ON vehicles(is_default);
 | `getLastFuelRecord` | `ORDER BY odometer DESC LIMIT 1` |
 | `getRecentFuelRecords(limit)` | `ORDER BY odometer DESC LIMIT ?` |
 | `getFuelRecordsByDateRange(s,e)` | `WHERE date BETWEEN ? AND ? ORDER BY odometer ASC` |
+| `getUserByEmail/ByTelegramId/ById` | 用户查询（spec 016） |
+| `getOrCreateTelegramUser` | 开放自助：TG 首次发消息自动建号（幂等 + 并发回查） |
+| `bindTelegramToUser` | 账号绑定/合并（情形 A/B，D1 batch，返回 `duplicateNames`） |
+| `migrateSingleUser`（`src/migrate.ts`） | 存量数据回填管理员 `user_id`（幂等，保留 `chat_id`） |
 
 > 所有查询用**参数化绑定**（`.bind(...)`），防 SQL 注入。新增查询沿用此模式。
+>
+> **多用户隔离（spec 016）**：读写函数接受可选 `userId`，提供时按 `user_id` 过滤（idiom 同 `vehicleId`）。**直接列过滤，不靠 JOIN**——这样 `vehicle_id IS NULL` 的孤儿记录也能正确隔离。多用户调用方（pipeline/chat-api/api）解析出 `userId` 后显式传入；单用户/cron/历史路径不传即不过滤（向后兼容）。缺 `userId` 过滤即可能越权读他人数据，靠测试强制覆盖。
 
 ---
 
@@ -168,6 +197,7 @@ CREATE INDEX idx_vehicles_default ON vehicles(is_default);
 > | [`0006_vehicle_alias.sql`](../../migrations/0006_vehicle_alias.sql) | 车辆别名：`vehicles` 加 `alias` + 唯一索引（前向一次性） | [spec 009](../specs/009-vehicle-alias/) |
 > | [`0007_vehicle_attributes.sql`](../../migrations/0007_vehicle_attributes.sql) | 车辆属性扩展：`vehicles` 加 `brand`/`model`/`fuel_type`/`tank_capacity`/`color`（前向一次性） | [spec 011](../specs/011-vehicle-attributes/) |
 > | [`0008_maintenance_soft_delete.sql`](../../migrations/0008_maintenance_soft_delete.sql) | 维保软删除：`maintenance_records` 加 `deleted_at` + 索引（前向一次性） | [spec 017](../specs/017-dedup-delete/) |
+> | [`0009_multi_user.sql`](../../migrations/0009_multi_user.sql) | 多用户：`users` 表 + 四张表加 `user_id` + `idx_*_user`（`CREATE TABLE` 幂等，`ADD COLUMN` 前向一次性）；配套数据迁移 `scripts/migrate-single-user.ts` | [spec 016](../specs/016-multi-user-pwa/) |
 
 ---
 

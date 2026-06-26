@@ -2,5 +2,12 @@ TELEGRAM_BOT_TOKEN=your_bot_token_from_botfather
 TELEGRAM_WEBHOOK_SECRET=any_random_secret_string
 DEEPSEEK_API_KEY=your_deepseek_api_key
 ANTHROPIC_API_KEY=your_anthropic_api_key
+# 管理员标识 + 存量数据迁移用；已不再做访问门控（spec 016 开放自助）
 ALLOWED_CHAT_ID=your_telegram_chat_id
+# 认证/绑定链接的站点地址。本地联调用 http://localhost:8787；
+# 注意 auth/bind 链接取其 origin（带 /dashboard 路径也只用 origin 部分）
 DASHBOARD_URL=https://moto.bbing.xyz/dashboard
+# 多用户邮箱认证（spec 016）：Resend 发信。RESEND_API_KEY 线上走 `wrangler secret put`，勿入 git。
+# SENDER_EMAIL 须属于在 Resend 验证过的域名（本地可用 onboarding@resend.dev，仅能发到你的 Resend 账号邮箱）
+RESEND_API_KEY=your_resend_api_key
+SENDER_EMAIL=noreply@yourdomain.com

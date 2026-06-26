@@ -162,39 +162,25 @@
   - 幂等（`WHERE user_id IS NULL` 重跑不命中）
 - [x] **T11.2** `test/migrate.test.ts`（3 用例）：回填 + chat_id 保留 / 幂等重跑全 0 不重复建号 / 不覆盖已有 user_id
 
-### T12 测试覆盖
+### T12 测试覆盖（随各刀写就，此处汇总）
 
-- [ ] **T12.1** 认证流程测试（mock Resend `fetch`）：
-  - send-link → KV 存 token → verify → 用户创建 → session 生成
-  - token 过期 → 拒绝
-  - 重复 verify → 拒绝（一次性）
-- [ ] **T12.2** 数据隔离测试：
-  - 创建用户 A + B + 各自车辆 + 加油记录
-  - 用户 A 查询不到 B 的数据
-  - 用户 B 查询不到 A 的数据
-- [ ] **T12.3** PWA 对话测试（mock Agent Loop）：
-  - POST /chat/api → 调用 Agent → 返回 reply
-  - 无 session → 401
-  - 历史加载 → 正确返回最近对话
-- [ ] **T12.4** 语音测试：mock 录音 → 调 stt → 返回转写文本
-- [ ] **T12.5** 绑定测试：
-  - /bind → 生成验证码 → POST /auth/bind(正确code) → 绑定成功
-  - POST /auth/bind(错误code) → 拒绝
-- [ ] **T12.6** 兼容性测试：
-  - 旧 Dashboard token 参数仍然可用（查看管理员数据）
-  - 所有已有测试不受影响
-  - 验证：`npm test` 全绿
+- [x] **T12.1** 认证流程（`test/auth.test.ts`，mock Resend）：send-link 存 token / GET verify 不消费 / POST verify 建用户+session / 过期 token 拒绝 / 重复 verify 410
+- [x] **T12.2** 数据隔离（`test/multi-user.test.ts`）：用户 A/B 互不可见；孤儿记录（`vehicle_id IS NULL`）仍按 `user_id` 隔离；dispatch 按 userId
+- [x] **T12.3** PWA 对话（`test/chat-api.test.ts`，mock DeepSeek）：POST /chat/api 调 Agent 返回 reply / 无 session 401 / 历史加载
+- [x] **T12.4** 语音（`test/chat-api.test.ts`）：multipart 上传 → stt → reply；无 audio 400
+- [x] **T12.5** 绑定（`test/auth.test.ts` + `multi-user.test.ts`）：链接式 GET 不消费/POST 合并+session+消费/未知 token 410；合并并集去重上报
+- [x] **T12.6** 兼容性：旧 Dashboard `?token=` 仍可用；cron 26 用例；全 287 测试绿（`npm test`）
 
 ### T13 文档与部署
 
-- [ ] **T13.1** 更新 `docs/schema.sql`（最终版）
-- [ ] **T13.2** 更新 `docs/engineering/data-model.md`（users 表 + 多用户隔离说明）
-- [ ] **T13.3** 更新 `docs/engineering/security.md`（多用户安全章节落地）
-- [ ] **T13.4** 更新 `docs/engineering/architecture.md`（新增 auth 端点 + `web/` SPA + `[assets]` 托管；引用 [ADR-0010](../../engineering/adr/0010-frontend-svelte-spa-static-assets.md)）
-- [ ] **T13.5** 更新 `CLAUDE.md`：代码地图加 `web/` 与 auth/chat 端点；常用命令加前端构建（`npm --prefix web run build` / dev）；§7 说明前端 devDeps 不算 Worker 生产依赖
-- [ ] **T13.6** 更新 `docs/specs/README.md` 索引（标记本 spec 状态）
-- [ ] **T13.7** 新增 `SENDER_EMAIL`（var）到 `.dev.vars.example` / `wrangler.toml`；`RESEND_API_KEY` 走 `wrangler secret put`；`wrangler.toml` 加 `[assets]` 指向 `web/dist`
-- [ ] **T13.8** 部署：
+- [x] **T13.1** `docs/schema.sql`（含 users + 四表 user_id + 索引）
+- [x] **T13.2** `docs/engineering/data-model.md`（users 表 + user_id 隔离说明 + 迁移 0009 登记）
+- [x] **T13.3** `docs/engineering/security.md`（§3 开放自助/session 鉴权、§6 多用户落地 + 成本敞口风险、§4 RESEND 密钥）
+- [x] **T13.4** `docs/engineering/architecture.md`（auth/chat 端点 + `web/` SPA + `[assets]` + 状态表新增 session/link KV）
+- [x] **T13.5** `CLAUDE.md`（形态/状态、命令加 web 构建 + 迁移脚本、代码地图加新文件、§6 文案走 i18n、§7 web devDeps 不算 Worker 依赖 + 多用户隔离）
+- [x] **T13.6** `docs/specs/README.md`（016 状态 → 🚧 待部署）
+- [x] **T13.7** `.dev.vars.example` 加 `RESEND_API_KEY`/`SENDER_EMAIL`；`wrangler.toml` `[assets]` 指向 `web/dist`（已配）；`RESEND_API_KEY` 走 `wrangler secret put`
+- [ ] **T13.8** 部署（**人工执行**，见下方清单）：
 
   1. `npm run type-check && npm test`（Worker）+ `npm --prefix web run build` 全绿
   2. 上线迁移 `wrangler d1 execute DB --remote --file=migrations/0009_multi_user.sql`
@@ -207,15 +193,9 @@
 
 ## 验收（Definition of Done）
 
-- [ ] 所有 `requirements.md` 验收标准（AC-1 至 AC-13）满足
-- [ ] `npm run type-check && npm test`（Worker）全绿；`npm --prefix web run build` + `svelte-check` 通过
-- [ ] 受影响文档已更新：
-  - `docs/schema.sql`
-  - `docs/engineering/data-model.md`
-  - `docs/engineering/security.md`
-  - `docs/engineering/architecture.md`
-  - `docs/engineering/adr/0010-frontend-svelte-spa-static-assets.md`（已建）
-  - `CLAUDE.md`
-  - `docs/specs/README.md`
-- [ ] 无 secret 泄露，遵守[安全清单](../../engineering/security.md) §7
+- [x] `npm run type-check && npm test`（Worker）全绿（287）；`npm --prefix web run build` + `svelte-check`（0 错误）通过
+- [x] 受影响文档已更新：`docs/schema.sql`、`data-model.md`、`security.md`、`architecture.md`、[ADR-0010](../../engineering/adr/0010-frontend-svelte-spa-static-assets.md)、`CLAUDE.md`、`docs/specs/README.md`
+- [x] 无 secret 泄露（`RESEND_API_KEY` 走 `wrangler secret put`，`.dev.vars` gitignore），遵守[安全清单](../../engineering/security.md) §7
+- [ ] 部署后线上验证（T13.8）：登录 → 对话 → 语音 → 仪表盘 → cron 推送 → /bind 合并
+- [ ] 已知残留（非阻塞，记 backlog）：auth 邮件确认页 i18n、自助解绑、LLM 成本配额、合并重复车自动归并
 - [ ] 迁移脚本幂等，存量数据无损

@@ -31,14 +31,20 @@
 
 ---
 
-## 3. 访问控制（两道关卡）
+## 3. 访问控制（多用户，spec 016）
 
-实现见 `src/index.ts`：
+> **重大变更（spec 016）**：原"chatId 白名单"门控**已移除**，改为**开放自助多用户**。访问控制现在分渠道：
 
-1. **Webhook Secret**：比对请求头 `X-Telegram-Bot-Api-Secret-Token` 与 `TELEGRAM_WEBHOOK_SECRET`，不匹配返回 **401**。注册 webhook 时通过 `secret_token` 绑定（见 [`../../README.md`](../../README.md)）。
-2. **chatId 白名单**：grammY 中间件校验 `ctx.chat.id == ALLOWED_CHAT_ID`，否则回"无访问权限"并终止。
+**Telegram 渠道**（`src/index.ts`）：
+1. **Webhook Secret**：比对请求头 `X-Telegram-Bot-Api-Secret-Token` 与 `TELEGRAM_WEBHOOK_SECRET`，不匹配返回 **401**（防伪造请求）。
+2. **无白名单**：任何 TG 用户首次发消息即由 `pipeline.resolveUserId → getOrCreateTelegramUser` 自动建号，数据按 `user_id` 隔离。`ALLOWED_CHAT_ID` 降级为"管理员标识 + 存量迁移用"，不再拦人。成本由**每用户限流**兜底（无总量配额——见风险）。
 
-> 顺序：先 secret（防伪造），后白名单（防越权）。两者都开才安全。
+**PWA / REST API 渠道**（`src/routes/auth-handler.ts` + `api.ts` + `chat-api.ts`）：
+1. **Magic Link 邮箱认证**：无密码，邮件验证链接 → session cookie（`HttpOnly; Secure; SameSite=Lax`，30 天滑动续期）。
+2. **数据隔离**：`/api/v1/*`、`/chat/*` 经 `resolveSession`→`user_id`，所有查询按 `user_id` 过滤（`database.ts` 层强制）。旧 Dashboard `?token=`（=`ALLOWED_CHAT_ID`）兼容 30 天过渡，仅管理员数据。
+3. **账号绑定**：仅在 Telegram 内发起（`/bind <email>` → 邮件链接 → 合并），PWA 零 Telegram 文案。
+
+> Telegram 先 secret（防伪造）；PWA 先 session（防越权）。数据隔离是默认拒绝：查询缺 `user_id` 即可能漏读，靠测试强制覆盖。
 
 ---
 
@@ -50,7 +56,9 @@
 | `TELEGRAM_WEBHOOK_SECRET` | 防伪造 | Workers Secret |
 | `DEEPSEEK_API_KEY` | 主 LLM | Workers Secret |
 | `ANTHROPIC_API_KEY` | 备 LLM | Workers Secret |
-| `ALLOWED_CHAT_ID` | 白名单 | Workers Secret |
+| `ALLOWED_CHAT_ID` | 管理员标识 + 存量迁移（已非门控） | Workers Secret |
+| `RESEND_API_KEY` | 邮箱认证发信（spec 016） | Workers Secret |
+| `SENDER_EMAIL` | 发件地址（Resend 已验证域名） | 环境变量（非密钥，可入 `wrangler.toml`/`.dev.vars`） |
 
 规则：
 - 生产用 `wrangler secret put <NAME>`，**绝不进 `wrangler.toml` 或代码**。
@@ -69,16 +77,20 @@
 
 ---
 
-## 6. Phase 3 多用户安全（前瞻）
+## 6. 多用户安全（spec 016 已落地）
 
-开放多用户前必须解决（建议先写 ADR）：
+实现见 [`../specs/016-multi-user-pwa/`](../specs/016-multi-user-pwa/)（requirements/design/tasks）。要点：
 
-- **数据隔离**：所有查询带 `user_id`/`chat_id` 维度，杜绝越权读他人数据（在 `database.ts` 层强制）。
-- **鉴权**：Telegram Login Widget 或 Workers 签发 JWT（Dashboard 场景）。
-- **限流/配额**：按用户限速，防滥用拉高 LLM 成本。
-- **隐私合规**：数据保留/删除策略、用户数据导出权。
+- **数据隔离 ✅**：所有读写带 `user_id`（直接列，非 JOIN，兼顾 `vehicle_id IS NULL` 的孤儿记录）；`database.ts` 层强制，测试覆盖隔离 + 孤儿场景。
+- **鉴权 ✅**：PWA Magic Link（邮箱无密码）→ session cookie；Telegram 开放自助自动建号；账号合并经邮件验证链接。
+- **限流 ✅ / 配额 ⚠️**：发信端点 `email+IP`、对话每用户限流均已有；**但开放自助后无总量/人均配额**，LLM 成本对公众敞口（见下风险）。
+- **账号合并**：合并是并集不去重——两端同名车会重复，合并后提示用户处理（不自动猜，design §3.2）。
+- **隐私合规 ⏳**：数据保留/删除/导出权尚未做（Phase 4）。
 
-> 在做多车（[`../specs/001-multi-vehicle/`](../specs/001-multi-vehicle/)）时就为表预留 `user_id` 演进位，避免 Phase 3 大改。
+**未决风险（需跟进）**：
+- ⚠️ **LLM 成本敞口**：开放自助下任何陌生人可触发 LLM 调用。当前仅每用户限流兜底。后续需：全局日配额、新用户冷却、可疑用量告警，必要时回退准入名单。
+- ⏳ **解绑**：无自助解绑端点。
+- ⏳ **auth 邮件链接确认页**：服务端 HTML 仍硬编码中文（点链接时无语言上下文）。
 
 ---
 
@@ -86,6 +98,6 @@
 
 - [ ] 新查询用参数化绑定，无 SQL 拼接。
 - [ ] 不在日志里打印完整 secret/token/用户敏感数据。
-- [ ] 新接口/命令经过白名单中间件。
+- [ ] 新的读写路径带 `user_id` 过滤/落库（多用户隔离，缺失即越权）；带测试。
 - [ ] 新密钥走 Secret，更新 `.dev.vars.example`（占位）与本文件 §4。
-- [ ] 多用户相关改动复核数据隔离。
+- [ ] PWA/API 新端点经 `resolveSession` 鉴权（401，不重定向）。
