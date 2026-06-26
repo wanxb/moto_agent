@@ -215,7 +215,7 @@ async function autoLogin(request: Request, env: Env): Promise<Response> {
   const sToken = await createSession(env.SESSION_KV, { user_id: userId, email: null });
   return new Response(null, {
     status: 302,
-    headers: { Location: `${baseUrl(request, env)}/dashboard`, 'Set-Cookie': buildSessionCookie(sToken) },
+    headers: { Location: `${baseUrl(request, env)}/dashboard?from=tg`, 'Set-Cookie': buildSessionCookie(sToken) },
   });
 }
 

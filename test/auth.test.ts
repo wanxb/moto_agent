@@ -225,7 +225,7 @@ describe('worker routing (index.ts)', () => {
     const url = `https://test.dev/auth/auto-login?t=${encodeURIComponent(token)}`;
     const res = await worker.fetch!(new Request(url), E);
     expect(res.status).toBe(302);
-    expect(res.headers.get('Location')).toBe('https://test.dev/dashboard');
+    expect(res.headers.get('Location')).toBe('https://test.dev/dashboard?from=tg');
     expect(res.headers.get('Set-Cookie')).toContain('session_token=');
     // 用户已创建（TG 开放自助）
     expect(await getUserByTelegramId(env.DB, '555')).not.toBeNull();

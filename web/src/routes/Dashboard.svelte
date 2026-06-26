@@ -28,6 +28,7 @@
   let loading = $state(true);
   let error = $state('');
   let noVehicles = $state(false);
+  let fromTg = $state(false);   // TG 推送进入 → 不显示返回按钮（隔离 PWA chat）
 
   let canvas = $state<HTMLCanvasElement | undefined>();
   let chart: Chart | null = null;
@@ -41,6 +42,7 @@
   }
 
   onMount(async () => {
+    fromTg = new URLSearchParams(location.search).get('from') === 'tg';
     const me = await getMe();
     if (!me) { location.href = '/login'; return; }
     try {
@@ -118,7 +120,11 @@
 
 <div class="wrap">
   <header>
-    <button class="link" onclick={() => { location.href = '/chat'; }}>‹ {tr(lang, 'back')}</button>
+    {#if fromTg}
+      <span class="spacer"></span>
+    {:else}
+      <button class="link" onclick={() => { location.href = '/chat'; }}>‹ {tr(lang, 'back')}</button>
+    {/if}
     <h1>⛽ {tr(lang, 'dashboard')}</h1>
     <span class="spacer"></span>
   </header>
