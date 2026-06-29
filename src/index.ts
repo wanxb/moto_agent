@@ -1,11 +1,11 @@
-import { Bot, webhookCallback, InlineKeyboard } from 'grammy';
+import { Bot, webhookCallback } from 'grammy';
 import { Env } from './types';
 import type { Lang } from './i18n/types';
 import { t, setLang, getLang, detectLang } from './i18n';
 import { runScheduled } from './scheduled';
 import { transcribe } from './stt';
 import { bootstrap } from './bootstrap';
-import { TelegramAdapter } from './gateway/adapters/telegram';
+import { TelegramAdapter, buildKeyboard } from './gateway/adapters/telegram';
 import { RestAdapter } from './gateway/adapters/rest';
 import { MAX_VOICE_SECONDS, BIND_LINK_TTL } from './config';
 import { handleApiRequest } from './routes/api';
@@ -29,17 +29,6 @@ function makeWelcome(lang: Lang): string {
 }
 function makeHelp(lang: Lang): string {
   return t('help.title', lang) + t('help.body', lang);
-}
-
-/** 按语言构建内联键盘按钮（快捷方式） */
-function buildKeyboard(lang: Lang): InlineKeyboard {
-  const langBtn = lang === 'zh' ? 'button.lang_to_en' : 'button.lang_to_zh';
-  return new InlineKeyboard()
-    .text(t('button.stats', lang),     'stats')
-    .text(t('button.last', lang),      'last')
-    .row()
-    .text(t('button.dashboard', lang), 'dashboard')
-    .text(t(langBtn, lang),            `lang:${lang}`);
 }
 
 /** 从 KV 读取语言偏好，KV 未设置时回退到 Telegram language_code，再回退到 zh */
@@ -94,7 +83,9 @@ function createBot(env: Env): Bot {
       // 切换语言时清空会话历史，防止旧历史干扰新语言
       const app = bootstrap(env);
       await app.session.clear(chatId);
-      await ctx.reply(t('lang.switched', arg, arg === 'zh' ? '中文' : 'English'));
+      await ctx.reply(t('lang.switched', arg, arg === 'zh' ? '中文' : 'English'), {
+        reply_markup: buildKeyboard(arg),
+      });
     } else {
       const lang = await resolveLang(env, chatId, ctx.from?.language_code);
       await ctx.reply(t('lang.unknown', lang));
@@ -109,7 +100,10 @@ function createBot(env: Env): Bot {
     // HMAC 签名 token（自包含，零 KV）：用户从 TG 点链接 → 自动登录 → 直接进看板
     const token = await signAutoLoginToken(chatId, env.TELEGRAM_WEBHOOK_SECRET);
     const link = `${origin}/auth/auto-login?t=${encodeURIComponent(token)}`;
-    return ctx.reply(t('dashboard.link', lang, link), { parse_mode: 'HTML' });
+    return ctx.reply(t('dashboard.link', lang, link), {
+      parse_mode: 'HTML',
+      reply_markup: buildKeyboard(lang),
+    });
   });
 
   // spec 016: 账号绑定（仅在 Telegram 内发起）。输入邮箱 → 发验证链接 → 点击即把本 TG 账号数据并入该邮箱账号。
@@ -181,7 +175,10 @@ function createBot(env: Env): Bot {
         const lang = await resolveLang(env, chatId, ctx.from?.language_code);
         const token = await signAutoLoginToken(chatId, env.TELEGRAM_WEBHOOK_SECRET);
         const link = `${origin}/auth/auto-login?t=${encodeURIComponent(token)}`;
-        await ctx.reply(t('dashboard.link', lang, link), { parse_mode: 'HTML' });
+        await ctx.reply(t('dashboard.link', lang, link), {
+          parse_mode: 'HTML',
+          reply_markup: buildKeyboard(lang),
+        });
       } else if (data === 'lang:zh' || data === 'lang:en') {
         const currentLang = data.split(':')[1] as Lang;
         const newLang: Lang = currentLang === 'zh' ? 'en' : 'zh';
