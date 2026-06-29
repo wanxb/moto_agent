@@ -8,7 +8,7 @@ export class FallbackLLM implements ILLMProvider {
   constructor(
     private primary: ILLMProvider,
     private secondary: ILLMProvider,
-    private maxRetries = 3,
+    private maxRetries = 1,
   ) {}
 
   async chat(messages: Message[], tools: ToolDefinition[]): Promise<LLMResponse> {

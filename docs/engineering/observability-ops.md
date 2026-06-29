@@ -68,9 +68,13 @@ curl -X POST "https://api.telegram.org/bot{TOKEN}/setWebhook" \
 ### 3.2 日常发布
 
 ```bash
+npm --prefix web run build        # 构建前端 PWA（web/ → web/dist）
 npm run type-check && npm test    # 门禁，必须全绿
 npm run deploy                     # 部署（Workers 原子切换，秒级）
 ```
+
+> 前端 PWA 构建在门禁前执行，确保 web/dist 包含最新的 SPA 产物。<br>
+> 若只改了 worker 端代码（src/）且前端未变，可跳过 `npm --prefix web run build` 加速部署，但不推荐——容易忘记。
 
 ### 3.3 数据库迁移
 

@@ -199,9 +199,18 @@ function createBot(env: Env): Bot {
   });
 
   bot.on('message:text', async ctx => {
-    const app = bootstrap(env);
-    const adapter = new TelegramAdapter(ctx, env);
-    await app.run(adapter, { text: ctx.message!.text ?? '' });
+    try {
+      const app = bootstrap(env);
+      const adapter = new TelegramAdapter(ctx, env);
+      await app.run(adapter, { text: ctx.message!.text ?? '' });
+    } catch (e) {
+      console.error('[tg] message:text fatal:', e instanceof Error ? e.stack : String(e));
+      // pipeline.ts 已有内部 try/catch，能兜住 agent 运行时异常；
+      // 此处兜底 bootstrap 或极早期错误，确保用户不会被静默吞掉
+      try {
+        await ctx.reply('⚠️ 暂时处理不了，稍后再试试吧。');
+      } catch { /* 静默 */ }
+    }
   });
 
   // 语音输入（spec 008）：转文字后走与打字完全相同的链路

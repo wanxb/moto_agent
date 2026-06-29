@@ -22,7 +22,7 @@ export function classifyComplexity(messages: Message[]): Complexity {
 
   // ── 复杂触发词（需要强模型推理）—— 优先于短消息规则 ──
   // 故障排查
-  if (/(故障|异响|报警|灯亮|怎么.*修|为什么|打不着|漏|抖|声音大|检查|诊断)/.test(text)) return 'complex';
+  if (/(故障|异响|报警|灯亮|怎么.*修|为什么|打不着|漏|抖|声音大|检查|诊断|散热|高温|过热|冷却|水温)/.test(text)) return 'complex';
   // 复合意图（逗号/分号分隔且跨领域）
   if (/[，,、；;]/.test(text) && /(加油|油耗|保养|换|提醒|查)/.test(text)) return 'complex';
   // 显式"同时/顺便/另外"连接不同操作

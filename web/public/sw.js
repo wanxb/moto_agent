@@ -1,6 +1,7 @@
-// Service Worker：静态资源缓存优先，API 请求网络优先。
-// 用户添加至主屏幕后，即使断网也能打开页面看到历史对话。
-const CACHE = 'moto-v1';
+// Service Worker：导航/SPA 路由网络优先，静态资源缓存优先。
+// SPA 路由走 networkFirst，确保用户始终加载最新 index.html 和 JS 包引用。
+// 静态资源（/assets/*.js.css）走 cacheFirst（hash-versioned，不可变）。
+const CACHE = 'moto-v2';
 const PRECACHE = ['/', '/chat', '/login', '/settings', '/dashboard'];
 
 self.addEventListener('install', (e) => {
@@ -21,12 +22,23 @@ self.addEventListener('activate', (e) => {
 
 self.addEventListener('fetch', (e) => {
   const url = new URL(e.request.url);
-  // API/动态路由走网络优先，静态资源走缓存优先
-  if (url.pathname.startsWith('/api/') || url.pathname.startsWith('/chat/') || url.pathname.startsWith('/auth/')) {
+  const path = url.pathname;
+
+  // API/动态路由走网络优先
+  if (path.startsWith('/api/') || path.startsWith('/chat/') || path.startsWith('/auth/')) {
     e.respondWith(networkFirst(e.request));
-  } else {
-    e.respondWith(cacheFirst(e.request));
+    return;
   }
+
+  // 静态资源（hash-versioned）走缓存优先
+  if (path.startsWith('/assets/') || path.startsWith('/icon-')) {
+    e.respondWith(cacheFirst(e.request));
+    return;
+  }
+
+  // SPA 导航路由、根路径等 → 网络优先（确保最新 index.html + JS 引用）
+  // 回退到缓存用于离线支持
+  e.respondWith(networkFirst(e.request));
 });
 
 async function cacheFirst(req) {

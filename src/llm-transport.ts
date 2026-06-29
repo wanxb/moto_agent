@@ -13,7 +13,7 @@ export function sleep(ms: number): Promise<void> {
 }
 
 export function isRetryable(e: unknown): boolean {
-  return e instanceof LLMError && (e.status === 429 || e.status >= 500);
+  return e instanceof LLMError && (e.status === 0 || e.status === 429 || e.status >= 500);
 }
 
 // ── DeepSeek (OpenAI-compatible) ─────────────────────────────────────────────
@@ -31,11 +31,18 @@ export async function callDeepSeek(
     body.tool_choice = 'auto';
   }
 
-  const res = await fetch(DEEPSEEK_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
-    body: JSON.stringify(body),
-  });
+  let res: Response;
+  try {
+    res = await fetch(DEEPSEEK_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(7_000),
+    });
+  } catch (e) {
+    // fetch 超时或网络错误 → 包装为 LLMError(0) 以便触发重试
+    throw new LLMError(0, e instanceof Error ? e.message : String(e));
+  }
   if (!res.ok) throw new LLMError(res.status, await res.text());
 
   const data = await res.json() as { choices: [{ message: { content: string | null; tool_calls?: ToolCall[] } }] };
@@ -77,15 +84,21 @@ export async function callAnthropic(
   };
   if (anthropicTools.length > 0) body.tools = anthropicTools;
 
-  const res = await fetch(ANTHROPIC_URL, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': apiKey,
-      'anthropic-version': '2023-06-01',
-    },
-    body: JSON.stringify(body),
-  });
+  let res: Response;
+  try {
+    res = await fetch(ANTHROPIC_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+      },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(7_000),
+    });
+  } catch (e) {
+    throw new LLMError(0, e instanceof Error ? e.message : String(e));
+  }
   if (!res.ok) throw new LLMError(res.status, await res.text());
 
   const data = await res.json() as { content: AnthropicBlock[] };

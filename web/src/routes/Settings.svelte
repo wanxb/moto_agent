@@ -49,9 +49,15 @@
 
     <section>
       <h2>{tr(lang, 'language')}</h2>
-      <div class="segmented">
-        <button class:active={lang === 'zh'} onclick={() => switchLang('zh')}>中文</button>
-        <button class:active={lang === 'en'} onclick={() => switchLang('en')}>English</button>
+      <div class="lang-radio" role="radiogroup">
+        <label class:checked={lang === 'zh'}>
+          <input type="radio" name="lang" value="zh" checked={lang === 'zh'} onchange={() => switchLang('zh')} />
+          <span>中文</span>
+        </label>
+        <label class:checked={lang === 'en'}>
+          <input type="radio" name="lang" value="en" checked={lang === 'en'} onchange={() => switchLang('en')} />
+          <span>English</span>
+        </label>
       </div>
     </section>
 
@@ -78,12 +84,15 @@
   .row { display: flex; justify-content: space-between; gap: 12px; padding: 6px 0; font-size: 0.95rem; }
   .k { color: var(--muted); }
   .v { color: var(--text); word-break: break-all; text-align: right; }
-  .segmented { display: flex; gap: 8px; }
-  .segmented button {
-    flex: 1; padding: 10px; border-radius: 10px; border: 1px solid var(--border);
-    background: var(--bg); color: var(--text); font-size: 0.95rem;
+  .lang-radio { display: flex; gap: 0; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; width: fit-content; }
+  .lang-radio label {
+    display: flex; align-items: center; gap: 4px; padding: 6px 14px; cursor: pointer;
+    font-size: 0.85rem; color: var(--text); background: var(--bg); user-select: none;
+    border-right: 1px solid var(--border);
   }
-  .segmented button.active { background: var(--accent); color: #000; border-color: var(--accent); font-weight: 600; }
+  .lang-radio label:last-child { border-right: none; }
+  .lang-radio label.checked { background: var(--accent); color: #000; font-weight: 600; }
+  .lang-radio input { display: none; }
   .danger {
     width: 100%; border: 1px solid var(--red); border-radius: 10px;
     background: transparent; color: var(--red); font-size: 0.95rem; padding: 12px;
