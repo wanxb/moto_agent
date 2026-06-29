@@ -26,6 +26,7 @@
   let maint = $state<Paged<MaintItem> | null>(null);
   let rem = $state<PagedRem | null>(null);
   let loading = $state(true);
+  let initialLoad = $state(true);
   let error = $state('');
   let noVehicles = $state(false);
   let fromTg = $state(false);   // TG 推送进入 → 不显示返回按钮（隔离 PWA chat）
@@ -69,6 +70,7 @@
       error = tr(lang, 'dash_load_failed');
     } finally {
       loading = false;
+      initialLoad = false;
     }
   }
 
@@ -133,6 +135,22 @@
 
   {#if noVehicles}
     <p class="empty">{tr(lang, 'no_vehicles')}</p>
+  {:else if initialLoad}
+    <div class="skeleton-dash">
+      <div class="skeleton-tabs"><div class="shimmer" style="width:80px"></div></div>
+      <div class="btn-row">
+        {#each DAYS as d}
+          <button class="shimmer" style="all:unset;flex:1;height:34px;border-radius:8px;background:var(--border);animation:shimmer 1.6s ease-in-out infinite;background-size:200%100%" aria-label="loading">&nbsp;</button>
+        {/each}
+      </div>
+      <div class="cards">
+        {#each [1,2,3,4] as _}
+          <div class="card"><div class="shimmer" style="height:36px;border-radius:6px"></div></div>
+        {/each}
+      </div>
+      <div class="chart-box"><div class="shimmer" style="height:200px;border-radius:8px"></div></div>
+      <section><h2 class="shimmer" style="width:120px;height:18px;border-radius:4px;margin-bottom:8px" aria-label="loading">&nbsp;</h2><div class="shimmer" style="height:160px;border-radius:8px"></div></section>
+    </div>
   {:else}
     {#if vehicles.length > 1}
       <nav class="tabs">
@@ -236,7 +254,9 @@
       {/if}
     </section>
 
-    {#if loading}<p class="loading">{tr(lang, 'dash_loading')}</p>{/if}
+    {#if loading && !initialLoad}
+      <div class="reload-overlay"><div class="spinner"></div></div>
+    {/if}
   {/if}
 </div>
 
@@ -278,6 +298,27 @@
   .pager { display: flex; align-items: center; justify-content: center; gap: 14px; margin-top: 10px; color: var(--muted); font-size: 0.85rem; }
   .pager button { width: 34px; height: 34px; border-radius: 8px; border: 1px solid var(--border); background: var(--card); color: var(--text); }
   .pager button:disabled { opacity: 0.4; }
-  .empty, .loading { color: var(--muted); text-align: center; padding: 20px; }
+  .empty { color: var(--muted); text-align: center; padding: 20px; }
   .err { color: var(--red); text-align: center; }
+
+  /* 骨架屏（复用 Chat shimmer 动画） */
+  .skeleton-dash { display: flex; flex-direction: column; gap: 14px; padding: 4px 0; }
+  .skeleton-tabs { display: flex; gap: 8px; }
+  .skeleton-dash .shimmer {
+    background: linear-gradient(90deg, var(--border) 25%, hsl(220,13%,22%) 50%, var(--border) 75%);
+    background-size: 200% 100%;
+    animation: shimmer 1.6s ease-in-out infinite;
+    border-radius: 6px;
+  }
+  @keyframes shimmer {
+    0%   { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+  }
+
+  /* 重新加载时的半透明遮罩 */
+  .reload-overlay {
+    display: flex;
+    justify-content: center;
+    padding: 20px;
+  }
 </style>

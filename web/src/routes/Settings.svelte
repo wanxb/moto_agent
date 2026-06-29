@@ -24,6 +24,14 @@
     try { await postJson('/auth/logout', {}); } catch { /* 无论成败都回登录页 */ }
     location.href = '/login';
   }
+
+  async function installPWA() {
+    const prompt = (window as any).__installPrompt;
+    if (!prompt) return;
+    prompt.prompt();
+    const result = await prompt.userChoice;
+    if (result.outcome === 'accepted') (window as any).__installPrompt = null;
+  }
 </script>
 
 <div class="wrap">
@@ -46,6 +54,12 @@
         <button class:active={lang === 'en'} onclick={() => switchLang('en')}>English</button>
       </div>
     </section>
+
+    {#if (window as any).__installPrompt}
+      <section>
+        <button class="install" onclick={installPWA}>{tr(lang, 'install')}</button>
+      </section>
+    {/if}
 
     <section>
       <button class="danger" onclick={logout}>{tr(lang, 'logout')}</button>
@@ -73,5 +87,9 @@
   .danger {
     width: 100%; border: 1px solid var(--red); border-radius: 10px;
     background: transparent; color: var(--red); font-size: 0.95rem; padding: 12px;
+  }
+  .install {
+    width: 100%; border: 1px solid var(--accent); border-radius: 10px;
+    background: var(--accent); color: #000; font-size: 0.95rem; padding: 12px; font-weight: 600;
   }
 </style>

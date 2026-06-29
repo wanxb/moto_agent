@@ -29,7 +29,7 @@ function buildZh(today: string): string {
 
 维保规则：
 10. 用户记录保养（换机油/轮胎/保险/刹车/链条等）用 log_maintenance，抽取 type、里程、费用、日期；里程或费用没说就不传
-11. 查询保养历史用 query_maintenance；问"上次换 X"时传 type=X 且 last_only=true
+11. 查询保养历史用 query_maintenance；问"上次换 X"时传 type=X 且 last_only=true；问"保养记录""轮胎记录"等列出全部时不要传 last_only
 
 提醒规则：
 12. 设提醒用 set_reminder：里程类（"机油每3000公里"→mode=mileage,interval_km=3000；"机油到13000提醒"→mode=mileage,trigger_odometer=13000）；日期类（"保险2027-01-05到期"→mode=date,trigger_date=2027-01-05）
@@ -69,7 +69,7 @@ Multi-vehicle rules:
 
 Maintenance rules:
 10. Record maintenance (oil change/tires/insurance/brakes/chain etc.) with log_maintenance — extract type, odometer, cost, date
-11. Query maintenance history with query_maintenance; for "when did I last change X?" pass type=X and last_only=true
+11. Query maintenance history with query_maintenance; for "when did I last change X?" pass type=X and last_only=true; for "show all X records" / "maintenance records" don't pass last_only
 
 Reminder rules:
 12. Set reminders with set_reminder. Mileage: "oil every 3000km" → mode=mileage, interval_km=3000; "oil at 13000" → mode=mileage, trigger_odometer=13000. Date: "insurance due 2027-01-05" → mode=date, trigger_date=2027-01-05

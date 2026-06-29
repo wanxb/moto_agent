@@ -3,7 +3,7 @@
 import type { Tool } from './interface';
 import type { Lang } from '../i18n/types';
 import { t } from '../i18n';
-import { resolveVehicle, ambiguousMsg, fmtKm, fmtCost, validateDateNotFuture } from './_helpers';
+import { resolveVehicle, ambiguousMsg, fmtKm, fmtCost, validateDateNotFuture, numCircle } from './_helpers';
 import {
   insertMaintenanceRecord, getMaintenanceRecords, getLastMaintenanceByType,
   findMaintenanceRecords, softDeleteMaintenanceRecord, renewReminderAfterMaintenance,
@@ -108,11 +108,13 @@ export class QueryMaintenanceTool implements Tool {
     if (records.length === 0) {
       return t('maint.no_records', lang, type || '', tag);
     }
-    const lines = records.map(m => `${m.date}  ${m.type}  ${fmtKm(m.odometer, lang)}  ${fmtCost(m.cost, lang)}`);
+    // 带编号 + 记录数的输出，让 LLM 无法"忽视"多条记录
+    const total = records.length;
+    const lines = records.map((m, i) => `${numCircle(i + 1)} ${m.date}  ${m.type}  ${fmtKm(m.odometer, lang)}  ${fmtCost(m.cost, lang)}`);
     const title = vehicleName
       ? t('maint.list_title_vehicle', lang, vehicleName, type || t('maint.records_word', lang))
       : (type ? t('maint.list_title', lang, type) : t('maint.list_title_default', lang));
-    return [title, '─'.repeat(32), ...lines].join('\n');
+    return [`${title} · ${t('maint.record_count', lang, String(total))}`, '─'.repeat(32), ...lines].join('\n');
   }
 }
 
@@ -167,9 +169,10 @@ export class DeleteMaintenanceTool implements Tool {
       return t('delete.maint_kept_one', lang, String(toDelete.length), tag) + '\n' + t('delete.recover_hint', lang);
     }
 
-    // 多条但未指明 keep_one：列出让用户缩小范围，不猜
+    // 多条但未指明 keep_one：列出让用户缩小范围，带总数+序号
     if (matches.length > 1) {
-      return t('delete.maint_multi', lang, matches.map(m => maintLine(m, lang)).join('\n'));
+      const lines = matches.map((m, i) => `${numCircle(i + 1)} ${maintLine(m, lang)}`);
+      return t('general.record_count', lang, String(matches.length)) + '\n' + t('delete.maint_multi', lang, lines.join('\n'));
     }
 
     // 唯一匹配：预览 → 确认 → 软删

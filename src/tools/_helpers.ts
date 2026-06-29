@@ -42,3 +42,9 @@ export function validateDateNotFuture(date: string, lang: Lang, today?: string):
 // ── 显示格式化 ───────────────────────────────────────────────────────────────
 
 export { fmtKm, fmtCost };
+
+/** 数字 → 带圈序号①-⑳，超过用 #N */
+export function numCircle(n: number): string {
+  const circled = ['①','②','③','④','⑤','⑥','⑦','⑧','⑨','⑩','⑪','⑫','⑬','⑭','⑮','⑯','⑰','⑱','⑲','⑳'];
+  return n <= 20 ? circled[n - 1] : `#${n}`;
+}

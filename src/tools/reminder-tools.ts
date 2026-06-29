@@ -3,7 +3,7 @@
 import type { Tool } from './interface';
 import type { Lang } from '../i18n/types';
 import { t, fmtNumber } from '../i18n';
-import { resolveVehicle, ambiguousMsg } from './_helpers';
+import { resolveVehicle, ambiguousMsg, numCircle } from './_helpers';
 import {
   insertReminder, listRemindersByVehicle, cancelReminders, getLatestOdometer,
 } from '../database';
@@ -92,13 +92,13 @@ export class ListRemindersTool implements Tool {
     const tag = vehicleName ? t('fuel.vehicle_tag', lang, vehicleName) : '';
     if (reminders.length === 0) return t('reminder.list_empty', lang, tag);
 
-    const lines = reminders.map(rm => {
+    const lines = reminders.map((rm, i) => {
       const cond = rm.mode === 'mileage'
         ? `${fmtNumber(rm.trigger_odometer ?? 0, lang)} km`
         : rm.trigger_date ?? '';
-      return `• ${rm.type} · ${cond}`;
+      return `${numCircle(i + 1)} ${rm.type} · ${cond}`;
     });
-    const title = t('reminder.list_title', lang, tag);
+    const title = t('reminder.list_title', lang, tag) + ' · ' + t('general.record_count', lang, String(reminders.length));
     return [title, ...lines].join('\n');
   }
 }

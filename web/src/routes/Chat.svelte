@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onMount, onDestroy } from 'svelte';
   import { getLang, tr } from '../lib/i18n';
   import { apiJson, postJson, postForm } from '../lib/api';
   import { getMe } from '../lib/session';
@@ -14,19 +14,33 @@
   let messages = $state<Msg[]>([]);
   let input = $state('');
   let sending = $state(false);
-  let busyLabel = $state('');     // 等待时占位气泡文案（思考中 / 识别中）
+  let busyLabel = $state('');
   let ready = $state(false);
   let listEl = $state<HTMLDivElement | undefined>();
+  let inputEl = $state<HTMLTextAreaElement | undefined>();
+  let viewportHeight = $state('100vh');
+  let viewportCleanup: (() => void) | undefined;
 
   onMount(async () => {
+    // visualViewport 键盘适配：键盘弹起时把高度缩到可视区，输入框就不被遮了
+    if (window.visualViewport) {
+      const onResize = () => { viewportHeight = `${window.visualViewport!.height}px`; };
+      window.visualViewport.addEventListener('resize', onResize);
+      viewportCleanup = () => window.visualViewport!.removeEventListener('resize', onResize);
+    }
+
     const me = await getMe();
     if (!me) { location.href = '/login'; return; }
     try {
       const data = await apiJson<{ messages: Msg[] }>('/chat/api?history=1');
       messages = data.messages;
-    } catch { /* 空历史，忽略 */ }
+    } catch { /* 空历史忽略 */ }
     ready = true;
     scrollDown();
+  });
+
+  onDestroy(() => {
+    viewportCleanup?.();
   });
 
   function scrollDown() {
@@ -50,11 +64,18 @@
     } finally {
       sending = false;
       busyLabel = '';
+      inputEl?.focus();
       scrollDown();
     }
   }
 
-  // 语音：Recorder 录完把 Blob 交来 → 上传 /chat/voice → 渲染识别文字 + Bot 回复。
+  // textarea 自动增高
+  function onInput() {
+    if (!inputEl) return;
+    inputEl.style.height = 'auto';
+    inputEl.style.height = Math.min(inputEl.scrollHeight, 120) + 'px';
+  }
+
   async function sendVoice(blob: Blob) {
     if (sending) return;
     sending = true;
@@ -73,6 +94,7 @@
     } finally {
       sending = false;
       busyLabel = '';
+      inputEl?.focus();
       scrollDown();
     }
   }
@@ -89,11 +111,18 @@
   ];
 </script>
 
-<div class="app">
+<div class="app" style="height: {viewportHeight}">
   <TopBar title={tr(lang, 'title')} onSettings={() => { location.href = '/settings'; }} />
 
   <div class="messages" bind:this={listEl}>
-    {#if ready && messages.length === 0}
+    {#if !ready}
+      <div class="skeleton-list">
+        <div class="sk sk-assistant"><div class="shimmer" style="width:68%"></div></div>
+        <div class="sk sk-user"><div class="shimmer" style="width:45%"></div></div>
+        <div class="sk sk-assistant"><div class="shimmer" style="width:82%"></div></div>
+        <div class="sk sk-assistant"><div class="shimmer" style="width:38%"></div></div>
+      </div>
+    {:else if messages.length === 0}
       <p class="empty">{tr(lang, 'empty')}</p>
     {/if}
     {#each messages as m}
@@ -108,14 +137,34 @@
 
   <div class="inputbar">
     <Recorder {lang} busy={sending} onAudio={sendVoice} />
-    <textarea rows="1" placeholder={tr(lang, 'input_ph')} bind:value={input} onkeydown={onKey}></textarea>
+    <textarea
+      bind:this={inputEl}
+      rows="1"
+      placeholder={tr(lang, 'input_ph')}
+      bind:value={input}
+      onkeydown={onKey}
+      oninput={onInput}
+      disabled={sending}
+    ></textarea>
     <button class="send" onclick={send} disabled={sending || !input.trim()}>{tr(lang, 'send')}</button>
   </div>
 </div>
 
 <style>
-  .app { display: flex; flex-direction: column; height: 100vh; max-width: 600px; margin: 0 auto; }
-  .messages { flex: 1 1 auto; overflow-y: auto; padding: 12px 14px; -webkit-overflow-scrolling: touch; }
+  .app {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    max-width: 600px;
+    margin: 0 auto;
+    transition: height 0.15s ease;
+  }
+  .messages {
+    flex: 1 1 auto;
+    overflow-y: auto;
+    padding: 12px 14px;
+    -webkit-overflow-scrolling: touch;
+  }
   .empty { color: var(--muted); text-align: center; margin-top: 40px; }
   .inputbar {
     flex: 0 0 auto;
@@ -135,7 +184,11 @@
     padding: 10px 12px;
     font-size: 0.95rem;
     max-height: 120px;
+    line-height: 1.4;
+    outline: none;
   }
+  textarea:focus { border-color: var(--accent); }
+  textarea:disabled { opacity: 0.5; }
   .send {
     flex: 0 0 auto;
     border: none;
@@ -144,6 +197,33 @@
     color: #000;
     font-weight: 600;
     padding: 0 18px;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
   }
-  .send:disabled { opacity: 0.5; }
+  .send:disabled { opacity: 0.4; }
+  .send:active { transform: scale(0.96); }
+
+  /* — 骨架屏 — */
+  .skeleton-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 8px 0;
+  }
+  .sk { display: flex; }
+  .sk-user { justify-content: flex-end; }
+  .sk-assistant { justify-content: flex-start; }
+  .sk .shimmer {
+    height: 36px;
+    border-radius: 14px;
+    background: linear-gradient(90deg, var(--border) 25%, hsl(220,13%,22%) 50%, var(--border) 75%);
+    background-size: 200% 100%;
+    animation: shimmer 1.6s ease-in-out infinite;
+  }
+  .sk-user .shimmer { border-bottom-right-radius: 4px; }
+  .sk-assistant .shimmer { border-bottom-left-radius: 4px; }
+  @keyframes shimmer {
+    0%   { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+  }
 </style>

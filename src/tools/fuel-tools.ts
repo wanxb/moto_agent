@@ -4,7 +4,7 @@
 import type { Tool } from './interface';
 import type { Lang } from '../i18n/types';
 import { t, fmtNumber, fmtPricePerL } from '../i18n';
-import { resolveVehicle, ambiguousMsg, fmtKm, fmtCost, validateDateNotFuture } from './_helpers';
+import { resolveVehicle, ambiguousMsg, fmtKm, fmtCost, validateDateNotFuture, numCircle } from './_helpers';
 import {
   insertFuelRecord, getLastFuelRecord, getRecentFuelRecords, getFuelRecordsByDateRange,
   updateFuelRecord, softDeleteFuelRecord, findFuelRecords,
@@ -147,9 +147,8 @@ export class QueryStatsTool implements Tool {
     if (lines.length === 0) return t('fuel.data_abnormal', lang);
 
     const avg = (totalLiters / totalKm * 100).toFixed(2);
-    const title = vehicleName
-      ? t('fuel.stats_title', lang, vehicleName)
-      : t('fuel.stats_title_default', lang);
+    const title = (vehicleName ? t('fuel.stats_title', lang, vehicleName) : t('fuel.stats_title_default', lang))
+      + ' · ' + t('general.record_count', lang, String(records.length));
     return [
       title,
       '─'.repeat(32),
@@ -312,8 +311,8 @@ export class DeleteFuelTool implements Tool {
     const matches = await findFuelRecords(db, { vehicleId, date, odometer, userId });
     if (matches.length === 0) return t('delete.fuel_not_found', lang);
     if (matches.length > 1) {
-      const lines = matches.map(m => fuelLine(m, lang));
-      return t('delete.fuel_multi', lang, lines.join('\n'));
+      const lines = matches.map((m, i) => `${numCircle(i + 1)} ${fuelLine(m, lang)}`);
+      return t('general.record_count', lang, String(matches.length)) + '\n' + t('delete.fuel_multi', lang, lines.join('\n'));
     }
 
     const target = matches[0];

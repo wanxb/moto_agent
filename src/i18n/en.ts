@@ -21,6 +21,7 @@ export const en: Record<string, string> = {
   'general.api_error': 'Processing failed',
   'general.rate_limit': 'Too many messages. Please wait {0}s 🕐',
   'general.no_voice_text': "Didn't catch that. Please speak again or type.",
+  'general.record_count': '{0} records',
 
   // ── Account binding (spec 016, Telegram-initiated, link-based) ──
   'bind.usage': 'Usage: /bind your@email.com',
@@ -98,6 +99,7 @@ export const en: Record<string, string> = {
   'maint.list_title_default': '🔧 Maintenance Records',
   'maint.list_title_vehicle': '🔧 {0} · {1}',
   'maint.records_word': 'Maintenance Records',
+  'maint.record_count': '{0} records',
 
   // ── Reminders ──
   'reminder.mileage_need': 'Mileage reminders need either an interval or a target odometer.',

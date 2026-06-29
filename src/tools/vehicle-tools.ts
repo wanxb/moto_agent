@@ -56,7 +56,8 @@ export class ListVehiclesTool implements Tool {
       const label = v.alias ? `${v.name}（${v.alias}）` : v.name;
       return `• ${label}${v.is_default ? t('vehicle.default_mark', lang) : ''}`;
     });
-    return [t('vehicle.list_title', lang), ...lines].join('\n');
+    const title = t('vehicle.list_title', lang) + ' · ' + t('general.record_count', lang, String(vehicles.length));
+    return [title, ...lines].join('\n');
   }
 }
 

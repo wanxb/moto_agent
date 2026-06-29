@@ -21,6 +21,7 @@ export const zh: Record<string, string> = {
   'general.api_error': '处理失败',
   'general.rate_limit': '消息有点频繁，请等 {0} 秒再发 🕐',
   'general.no_voice_text': '没听清，请再说一遍或直接打字。',
+  'general.record_count': '共 {0} 条',
 
   // ── 账号绑定（spec 016，仅 TG 发起，链接式）──
   'bind.usage': '用法：/bind 你的邮箱',
@@ -98,6 +99,7 @@ export const zh: Record<string, string> = {
   'maint.list_title_default': '🔧 保养记录',
   'maint.list_title_vehicle': '🔧 {0} · {1}',
   'maint.records_word': '保养记录',
+  'maint.record_count': '共 {0} 条记录',
 
   // ── 提醒工具 ──
   'reminder.mileage_need': '里程提醒需要给"间隔公里数"或"目标里程"其中之一。',
