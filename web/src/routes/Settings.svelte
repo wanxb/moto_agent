@@ -84,7 +84,7 @@
   .row { display: flex; justify-content: space-between; gap: 12px; padding: 6px 0; font-size: 0.95rem; }
   .k { color: var(--muted); }
   .v { color: var(--text); word-break: break-all; text-align: right; }
-  .lang-radio { display: flex; gap: 0; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; width: fit-content; }
+  .lang-radio { display: flex; gap: 0; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; width: fit-content; margin-left: auto; }
   .lang-radio label {
     display: flex; align-items: center; gap: 4px; padding: 6px 14px; cursor: pointer;
     font-size: 0.85rem; color: var(--text); background: var(--bg); user-select: none;
