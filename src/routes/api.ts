@@ -285,7 +285,7 @@ async function getMaintenanceRecordsByVehicleName(db: D1Database, vehicle: strin
   const { results } = await db.prepare(
     `SELECT m.* FROM maintenance_records m
        JOIN vehicles v ON m.vehicle_id = v.id
-      WHERE v.is_active = 1 AND (v.name = ? OR v.alias = ?)${extra}
+      WHERE v.is_active = 1 AND m.deleted_at IS NULL AND (v.name = ? OR v.alias = ?)${extra}
       ORDER BY m.date DESC, m.id DESC`
   ).bind(...binds).all<MaintenanceRecord>();
   return results;
