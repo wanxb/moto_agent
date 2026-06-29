@@ -5,7 +5,7 @@ import type { Lang } from '../i18n/types';
 import { t } from '../i18n';
 import { resolveVehicle, ambiguousMsg, fmtKm, fmtCost, validateDateNotFuture, numCircle } from './_helpers';
 import {
-  insertMaintenanceRecord, getMaintenanceRecords, getLastMaintenanceByType,
+  insertMaintenanceRecord, getMaintenanceRecords,
   findMaintenanceRecords, softDeleteMaintenanceRecord, renewReminderAfterMaintenance,
 } from '../database';
 import { MAINT_DUP_DAYS } from '../config';
@@ -99,9 +99,16 @@ export class QueryMaintenanceTool implements Tool {
     const tag = vehicleName ? t('fuel.vehicle_tag', lang, vehicleName) : '';
 
     if (last_only && type) {
-      const last = await getLastMaintenanceByType(db, type, vehicleId, userId);
-      if (!last) return t('maint.no_records', lang, type, tag);
-      return [t('maint.last_title', lang, type, tag), `${last.date} · ${fmtKm(last.odometer, lang)} · ${fmtCost(last.cost, lang)}`].join('\n');
+      // 即使只查最近一条，也查出总数让 LLM 看到（防止 LLM 错误传 last_only=true 时丢失信息）
+      const records = await getMaintenanceRecords(db, { vehicleId, type, userId });
+      if (records.length === 0) return t('maint.no_records', lang, type, tag);
+      const last = records[0];
+      const parts: string[] = [`${t('maint.last_title', lang, type, tag)} · ${t('general.record_count', lang, String(records.length))}`];
+      parts.push(`${last.date} · ${fmtKm(last.odometer, lang)} · ${fmtCost(last.cost, lang)}`);
+      if (records.length > 1) {
+        parts.push(t('maint.more_records', lang, String(records.length - 1)));
+      }
+      return parts.join('\n');
     }
 
     const records = await getMaintenanceRecords(db, { vehicleId, type, userId });

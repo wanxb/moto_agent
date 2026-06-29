@@ -100,6 +100,7 @@ export const zh: Record<string, string> = {
   'maint.list_title_vehicle': '🔧 {0} · {1}',
   'maint.records_word': '保养记录',
   'maint.record_count': '共 {0} 条记录',
+  'maint.more_records': '（还有 {0} 条记录，查看全部请说"保养记录"）',
 
   // ── 提醒工具 ──
   'reminder.mileage_need': '里程提醒需要给"间隔公里数"或"目标里程"其中之一。',

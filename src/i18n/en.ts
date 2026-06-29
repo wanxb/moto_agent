@@ -100,6 +100,7 @@ export const en: Record<string, string> = {
   'maint.list_title_vehicle': '🔧 {0} · {1}',
   'maint.records_word': 'Maintenance Records',
   'maint.record_count': '{0} records',
+  'maint.more_records': '({0} more records — say "maintenance records" to view all)',
 
   // ── Reminders ──
   'reminder.mileage_need': 'Mileage reminders need either an interval or a target odometer.',
