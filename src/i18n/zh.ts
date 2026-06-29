@@ -1,5 +1,7 @@
 // 中文翻译字典（spec 010）。
 
+import { BRAND } from '../brand';
+
 export const zh: Record<string, string> = {
   // ── 通用 ──
   'general.vehicle_not_found': '没有找到车辆「{0}」。',
@@ -127,7 +129,7 @@ export const zh: Record<string, string> = {
   'cron.remind_count': '（第 {0} 次提醒）',
 
   // ── 入口 ──
-  'welcome.title': '👋 弼马温 · 摩托车油耗管家',
+  'welcome.title': `👋 ${BRAND.taglineZh}`,
   'welcome.body': '\n\n直接发消息记录加油或查询统计，例如：\n• 刚加了 10 升 95 号，花了 98 块，里程 12580\n• 查一下最近 3 个月油耗\n• 上次什么时候加的油\n\n命令：/stats 本月统计  /last 最近记录  /help 帮助',
   'help.title': '📖 使用方法',
   'help.body': '\n\n记录加油：说出加油信息即可\n  "今天加了 10 升，花了 98，里程 12580"\n\n查询油耗：\n  "最近 3 个月油耗"  "本月统计"  "最近 5 次"\n\n快捷命令：\n  /stats  本月油耗统计\n  /last   最近一次加油记录',
@@ -135,7 +137,7 @@ export const zh: Record<string, string> = {
   'voice.stt_failed': '语音识别失败，请再说一遍或直接打字。',
   'voice.heard': '🎙 听到：{0}',
   'dashboard.no_url': '⚠️ 未配置 Dashboard 地址，请联系管理员设置 DASHBOARD_URL。',
-  'dashboard.link': '📊 <a href="{0}">打开弼马温 Dashboard</a>',
+  'dashboard.link': `📊 <a href="{0}">打开${BRAND.nameZh} Dashboard</a>`,
   'lang.switched': '✅ 语言已切换为{0}。',
   'lang.unknown': '支持的语言：zh（中文）、en（English）。示例：/lang en',
 

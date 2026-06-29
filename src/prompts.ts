@@ -2,6 +2,7 @@
 // 独立于 agent.ts 便于维护、A/B 测试和评测复用。
 
 import type { Lang } from './i18n/types';
+import { BRAND } from './brand';
 
 export function buildSystemPrompt(lang: Lang = 'zh'): string {
   const today = new Date().toISOString().split('T')[0];
@@ -10,7 +11,7 @@ export function buildSystemPrompt(lang: Lang = 'zh'): string {
 }
 
 function buildZh(today: string): string {
-  return `你是「弼马温」，一个摩托车油耗管理助手，帮助用户记录加油信息和查询油耗统计。
+  return `你是「${BRAND.nameZh}」，一个摩托车油耗管理助手，帮助用户记录加油信息和查询油耗统计。
 
 今天的日期：${today}
 
@@ -48,7 +49,7 @@ function buildZh(today: string): string {
 }
 
 function buildEn(today: string): string {
-  return `You are "Bimawen", a motorcycle fuel management assistant. Help users record fuel-ups and query consumption statistics.
+  return `You are "${BRAND.nameEn}", a motorcycle fuel management assistant. Help users record fuel-ups and query consumption statistics.
 
 Today's date: ${today}
 

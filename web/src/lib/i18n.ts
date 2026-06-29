@@ -1,10 +1,12 @@
 // 极简双语：?lang= 优先（并记住），否则 localStorage，默认 zh。
 
+import { BRAND } from './brand';
+
 export type Lang = 'zh' | 'en';
 
 const dict: Record<Lang, Record<string, string>> = {
   zh: {
-    title: 'Moto Bot',
+    title: BRAND.nameZh,
     input_ph: '输入加油记录…',
     send: '发送',
     dashboard: '仪表盘', logFuel: '记加油', vehicles: '车辆管理', history: '历史',
@@ -30,7 +32,7 @@ const dict: Record<Lang, Record<string, string>> = {
     avg_consumption: '平均油耗', total_liters: '总油量', total_cost: '总费用', total_km: '总里程',
     chart_volume: '加油量 (L)', chart_cost: '费用 (¥)', chart_consumption: '油耗 (L/100km)', l_per_100: 'L/100km',
     dash_loading: '加载中…', dash_load_failed: '加载失败',
-    login_title: '弼马温',
+    login_title: BRAND.nameZh,
     email_ph: '输入邮箱地址',
     send_link: '发送登录链接',
     login_hint: '我们会发送一封登录邮件，无需密码，无需注册',
@@ -42,7 +44,7 @@ const dict: Record<Lang, Record<string, string>> = {
     install: '📲 安装到桌面',
   },
   en: {
-    title: 'Bimawen',
+    title: BRAND.nameEn,
     input_ph: 'Log a fuel-up…',
     send: 'Send',
     dashboard: 'Dashboard', logFuel: 'Add fuel', vehicles: 'Vehicles', history: 'History',
@@ -68,7 +70,7 @@ const dict: Record<Lang, Record<string, string>> = {
     avg_consumption: 'Avg Fuel', total_liters: 'Total Vol', total_cost: 'Total Cost', total_km: 'Total Odo',
     chart_volume: 'Volume (L)', chart_cost: 'Cost (¥)', chart_consumption: 'Consumption (L/100km)', l_per_100: 'L/100km',
     dash_loading: 'Loading…', dash_load_failed: 'Load failed',
-    login_title: 'Bimawen',
+    login_title: BRAND.nameEn,
     email_ph: 'Enter your email',
     send_link: 'Send magic link',
     login_hint: 'We’ll email you a login link — no password, no signup',

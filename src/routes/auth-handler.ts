@@ -5,6 +5,7 @@
 import type { Env } from '../types';
 import type { Lang } from '../i18n/types';
 import { t, getLang } from '../i18n';
+import { BRAND } from '../brand';
 import { MAGIC_LINK_TTL, GOOGLE_OAUTH_STATE_TTL } from '../config';
 import { pushPwaNotice } from './chat-api';
 import { checkRateLimit, RULES } from '../gateway/rate-limiter';
@@ -151,7 +152,7 @@ async function bindPage(request: Request, env: Env): Promise<Response> {
 
   return html(200, `<!DOCTYPE html><html lang="zh"><head><meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>确认绑定 · 弼马温</title>${STYLE}</head>
+<title>确认绑定 · ${BRAND.nameZh}</title>${STYLE}</head>
 <body><div class="card">
 <h1>🏍 确认绑定账号</h1>
 <p>点击下方按钮，将你的记录绑定到 <b>${escapeHtml(rec.email)}</b>。</p>
@@ -404,6 +405,6 @@ button:active{opacity:.85}
 function page(title: string, msg: string): string {
   return `<!DOCTYPE html><html lang="zh"><head><meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>${escapeHtml(title)} · 弼马温</title>${STYLE}</head>
+<title>${escapeHtml(title)} · ${BRAND.nameZh}</title>${STYLE}</head>
 <body><div class="card"><h1>🏍 ${escapeHtml(title)}</h1><p>${escapeHtml(msg)}</p></div></body></html>`;
 }
