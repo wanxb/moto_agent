@@ -8,7 +8,7 @@
 
 ## 1. 这是什么项目
 
-**摩托车油耗管理 Telegram Bot。** 用户用自然语言在 Telegram 里记录加油（里程、升数、价格），系统通过 LLM 解析后写入数据库并计算油耗，支持查询统计。
+**弼马温 — 摩托车油耗管理 Telegram Bot。** 用户用自然语言在 Telegram 里记录加油（里程、升数、价格），系统通过 LLM 解析后写入数据库并计算油耗，支持查询统计。
 
 - **形态**：Telegram Bot（webhook 模式）+ **多用户 PWA**（`web/` Svelte SPA，经 `[assets]` 托管，spec 016）。
 - **运行时**：Cloudflare Workers（边缘 Serverless，单请求无状态）。

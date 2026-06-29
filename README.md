@@ -1,4 +1,4 @@
-# 摩托车油耗管理 Bot
+# 弼马温 — 摩托车油耗管理 Bot
 
 Telegram Bot，用自然语言记录加油数据，自动计算油耗统计。部署在 Cloudflare Workers + D1。
 

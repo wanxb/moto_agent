@@ -10,7 +10,7 @@ export function buildSystemPrompt(lang: Lang = 'zh'): string {
 }
 
 function buildZh(today: string): string {
-  return `你是一个摩托车油耗管理助手，帮助用户记录加油信息和查询油耗统计。
+  return `你是「弼马温」，一个摩托车油耗管理助手，帮助用户记录加油信息和查询油耗统计。
 
 今天的日期：${today}
 
@@ -48,7 +48,7 @@ function buildZh(today: string): string {
 }
 
 function buildEn(today: string): string {
-  return `You are a motorcycle fuel management assistant. Help users record fuel-ups and query consumption statistics.
+  return `You are "Bimawen", a motorcycle fuel management assistant. Help users record fuel-ups and query consumption statistics.
 
 Today's date: ${today}
 

@@ -126,7 +126,7 @@ export const en: Record<string, string> = {
   'cron.remind_count': ' (reminder {0})',
 
   // ── Entry ──
-  'welcome.title': '👋 Moto Fuel Agent',
+  'welcome.title': '👋 Bimawen · Moto Fuel Agent',
   'welcome.body': '\n\nSend a message to log fuel or query stats. Examples:\n• Just filled 10L of 95, ¥98, odometer 12580\n• Check fuel consumption for last 3 months\n• When was my last fill-up?\n\nCommands: /stats monthly  /last recent  /help',
   'help.title': '📖 Help',
   'help.body': '\n\nLog fuel: Just describe your fill-up\n  "10 liters, ¥98, odometer 12580"\n\nQuery stats:\n  "Last 3 months"  "This month"  "Last 5"\n\nCommands:\n  /stats  Monthly stats\n  /last   Last fill-up',
@@ -134,7 +134,7 @@ export const en: Record<string, string> = {
   'voice.stt_failed': 'Speech recognition failed. Please try again or type.',
   'voice.heard': '🎙 Heard: {0}',
   'dashboard.no_url': '⚠️ Dashboard URL not configured. Contact admin to set DASHBOARD_URL.',
-  'dashboard.link': '📊 <a href="{0}">Open Moto Agent Dashboard</a>',
+  'dashboard.link': '📊 <a href="{0}">Open Bimawen Dashboard</a>',
   'lang.switched': '✅ Language switched to {0}.',
   'lang.unknown': 'Supported languages: zh (中文), en (English). E.g. /lang en',
 

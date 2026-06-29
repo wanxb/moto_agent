@@ -3,6 +3,7 @@
 // 需 env.RESEND_API_KEY（secret）+ env.SENDER_EMAIL（属于 Resend 已验证域名）。
 
 import type { Env } from '../types';
+import { BRAND } from '../brand';
 
 /** 调 Resend 发一封纯文本邮件。失败抛出人类可读错误，由调用方转成用户提示。 */
 export async function sendEmail(env: Env, to: string, subject: string, text: string): Promise<void> {
@@ -18,7 +19,7 @@ export async function sendEmail(env: Env, to: string, subject: string, text: str
       'content-type': 'application/json',
     },
     body: JSON.stringify({
-      from: `Moto Bot <${env.SENDER_EMAIL}>`,
+      from: `${BRAND.emailFrom} <${env.SENDER_EMAIL}>`,
       to: [to],
       subject,
       text,
@@ -35,15 +36,15 @@ export async function sendEmail(env: Env, to: string, subject: string, text: str
 /** 发登录魔法链接邮件（15 分钟有效）。 */
 export async function sendMagicLinkEmail(env: Env, email: string, link: string): Promise<void> {
   await sendEmail(
-    env, email, '🔑 Moto Bot 登录链接',
-    `点击以下链接登录 Moto Bot（15 分钟内有效）：\n\n${link}\n\n如果非本人操作，请忽略此邮件。`,
+    env, email, `${BRAND.emailPrefix} 登录链接`,
+    `点击以下链接登录${BRAND.nameZh}（15 分钟内有效）：\n\n${link}\n\n如果非本人操作，请忽略此邮件。`,
   );
 }
 
 /** 发账号绑定验证链接邮件（10 分钟有效）。点击即把数据并入此邮箱账号。 */
 export async function sendBindLinkEmail(env: Env, email: string, link: string): Promise<void> {
   await sendEmail(
-    env, email, '🔗 Moto Bot 账号绑定',
+    env, email, `🔗 ${BRAND.nameZh} 账号绑定`,
     `点击以下链接完成账号绑定（10 分钟内有效）：\n\n${link}\n\n确认后，你的记录将归入此邮箱账号。\n如果非本人操作，请忽略此邮件。`,
   );
 }

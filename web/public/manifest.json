@@ -1,6 +1,6 @@
 {
-  "name": "Moto Bot — 摩托车油耗管家",
-  "short_name": "Moto Bot",
+  "name": "弼马温 — 摩托车油耗管家",
+  "short_name": "弼马温",
   "description": "用对话或语音记录加油，自动计算油耗",
   "start_url": "/chat",
   "display": "standalone",

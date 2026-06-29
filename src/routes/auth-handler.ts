@@ -90,9 +90,9 @@ async function verifyPage(request: Request, env: Env): Promise<Response> {
   // 注意：不删除 token、不建 session。需用户点击按钮 POST 才消费。
   return html(200, `<!DOCTYPE html><html lang="zh"><head><meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>确认登录 · Moto Bot</title>${STYLE}</head>
+<title>确认登录 · 弼马温</title>${STYLE}</head>
 <body><div class="card">
-<h1>🏍 确认登录 Moto Bot</h1>
+<h1>🏍 确认登录弼马温</h1>
 <p>点击下方按钮完成登录。</p>
 <form method="POST" action="/auth/verify">
 <input type="hidden" name="token" value="${escapeHtml(token)}">
@@ -151,7 +151,7 @@ async function bindPage(request: Request, env: Env): Promise<Response> {
 
   return html(200, `<!DOCTYPE html><html lang="zh"><head><meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>确认绑定 · Moto Bot</title>${STYLE}</head>
+<title>确认绑定 · 弼马温</title>${STYLE}</head>
 <body><div class="card">
 <h1>🏍 确认绑定账号</h1>
 <p>点击下方按钮，将你的记录绑定到 <b>${escapeHtml(rec.email)}</b>。</p>
@@ -404,6 +404,6 @@ button:active{opacity:.85}
 function page(title: string, msg: string): string {
   return `<!DOCTYPE html><html lang="zh"><head><meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>${escapeHtml(title)} · Moto Bot</title>${STYLE}</head>
+<title>${escapeHtml(title)} · 弼马温</title>${STYLE}</head>
 <body><div class="card"><h1>🏍 ${escapeHtml(title)}</h1><p>${escapeHtml(msg)}</p></div></body></html>`;
 }
