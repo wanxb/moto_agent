@@ -44,6 +44,19 @@ export class TelegramAdapter implements ChannelAdapter {
     this.lang = lang ?? 'zh';
     return this.lang;
   }
+
+  /** 发送"思考中…"占位消息，返回消息 ID 用于后续 replaceReply 替换 */
+  async sendPrelude(lang: Lang): Promise<string> {
+    const msg = await this.ctx.api.sendMessage(this.chatId, '🤔 思考中…');
+    return String(msg.message_id);
+  }
+
+  /** 将之前发送的"思考中…"替换为最终回复，附内联键盘 */
+  async replaceReply(preludeId: string, text: string, lang: Lang): Promise<unknown> {
+    return this.ctx.api.editMessageText(this.chatId, Number(preludeId), text, {
+      reply_markup: buildKeyboard(lang),
+    });
+  }
 }
 
 /** 按语言构建内联键盘按钮（快捷方式）—— 导出供 index.ts 复用 */

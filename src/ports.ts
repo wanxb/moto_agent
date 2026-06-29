@@ -49,4 +49,17 @@ export interface ChannelAdapter {
   authenticate?(raw: unknown): Promise<void> | void;
   /** 可选：检测用户语言偏好，返回 'zh' | 'en' */
   detectLanguage?(): Promise<Lang> | Lang;
+  /**
+   * 可选：发送一条占位消息（如"思考中…"），让用户知道 Bot 已在处理。
+   * 返回占位标识符，后续传给 replaceReply() 来替换为最终内容。
+   * 不实现 = 不做预回复（同步渠道如 REST 无需此功能）。
+   */
+  sendPrelude?(lang: Lang): Promise<string>;
+  /**
+   * 可选：将之前 sendPrelude 发送的占位消息替换为最终回复。
+   * @param preludeId sendPrelude 返回的标识
+   * @param text 最终回复内容
+   * @param lang 语言（用于构建渠道特有 UI，如内联键盘）
+   */
+  replaceReply?(preludeId: string, text: string, lang: Lang): Promise<unknown>;
 }

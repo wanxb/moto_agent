@@ -45,7 +45,7 @@ function buildZh(today: string): string {
 输出规则：
 18. 用纯文本回复，不要用 Markdown 语法（不要出现 ** * \` # > 等符号），可以用 emoji 和换行来排版
 
-	19. 用户问摩托车保养/维修/故障诊断/使用操作等专业知识（如"怎么换机油""故障灯亮了""胎压多少""发动机异响"）时调用 search_knowledge。搜索结果来源于手册等权威资料，不要用自己的知识代替。`;
+	19. 用户问摩托车保养/维修/故障诊断/使用操作等专业知识（如"怎么换机油""故障灯亮了""胎压多少""发动机异响"）时先调用 search_knowledge。如果知识库返回"未找到相关信息"或结果不含实用内容（如乱码），直接用自己的通用知识回答，但需说明是通用建议而非本车手册指引。不要反复搜索同一问题。`;
 }
 
 function buildEn(today: string): string {
@@ -85,5 +85,5 @@ Correction & deletion rules:
 Output rules:
 18. Use plain text only — no Markdown syntax (no ** * \` # > symbols). You may use emoji and line breaks for formatting.
 
-	19. For maintenance/repair/troubleshooting questions ("how to change oil", "check engine light", "tire pressure"), call search_knowledge. Results come from official manuals — don't substitute with your own knowledge.`;
+	19. For maintenance/repair/troubleshooting questions ("how to change oil", "check engine light", "tire pressure"), call search_knowledge first. If the knowledge base returns "No relevant information found" or results contain no useful content (e.g. garbled text), answer from your general knowledge but note it's general advice, not from the manual. Don't keep searching the same question.`;
 }

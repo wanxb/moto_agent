@@ -3,7 +3,7 @@
 
 // ── Agent Loop ───────────────────────────────────────────────────────────────
 /** Agent 最多工具调用轮数（Workers wall-time 护栏） */
-export const MAX_ROUNDS = 4;
+export const MAX_ROUNDS = 8;
 
 // ── LLM ──────────────────────────────────────────────────────────────────────
 /** 主模型 ID（OpenAI 兼容格式，DeepSeek V4 Flash，2026-07-24 起替代 deepseek-chat） */

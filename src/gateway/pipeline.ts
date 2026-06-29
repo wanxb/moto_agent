@@ -32,6 +32,7 @@ export async function runPipeline(
   const t0 = Date.now();
   let status = 'ok';
   let reply = '';
+  let preludeId: string | null = null;
 
   try {
     // 1. 提取用户
@@ -62,7 +63,12 @@ export async function runPipeline(
       return null;
     }
 
-    // 5. 会话 + Agent（解析当前用户 → 注入 user_id 实现数据隔离）
+    // 5. 预热：先发一条占位消息（聊胜于无，用户立刻看到反馈）
+    if (adapter.sendPrelude) {
+      preludeId = await adapter.sendPrelude(lang);
+    }
+
+    // 6. 会话 + Agent（解析当前用户 → 注入 user_id 实现数据隔离）
     const dbUserId = ctx.resolveUserId ? await ctx.resolveUserId(userId, lang) : undefined;
     const history = await ctx.session.get(userId);
     history.push({ role: 'user', content: text });
@@ -70,19 +76,29 @@ export async function runPipeline(
     reply = await ctx.agent(history, ctx.db, lang, dbUserId);
     const clean = toPlainText(reply);
 
-    // 6. 持久化会话
+    // 7. 持久化会话
     const trimmed = trimHistory(history, MAX_SESSION_MESSAGES);
     await ctx.session.set(userId, trimmed, SESSION_TTL);
 
-    // 7. 回复
-    await adapter.reply(userId, clean);
+    // 8. 回复：有占位就替换，没有就直接回复
+    if (preludeId && adapter.replaceReply) {
+      await adapter.replaceReply(preludeId, clean, lang);
+    } else {
+      await adapter.reply(userId, clean);
+    }
   } catch (e) {
     status = 'error';
     console.error('[pipeline] error:', e instanceof Error ? e.message : String(e));
     // 尝试回复用户统一错误提示（reply 失败则静默）
     try {
       const lang: Lang = adapter.detectLanguage ? await adapter.detectLanguage() : 'zh';
-      await adapter.reply('', t('general.fallback_error', lang));
+      const errMsg = t('general.fallback_error', lang);
+      // 如果已经发了占位消息，就地替换为错误提示
+      if (preludeId && adapter.replaceReply) {
+        await adapter.replaceReply(preludeId, errMsg, lang);
+      } else {
+        await adapter.reply('', errMsg);
+      }
     } catch { /* 静默 */ }
   }
 
