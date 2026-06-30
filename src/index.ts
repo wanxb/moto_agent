@@ -1,4 +1,4 @@
-import { Bot, webhookCallback } from 'grammy';
+import { Bot, webhookCallback, Context } from 'grammy';
 import { Env } from './types';
 import type { Lang } from './i18n/types';
 import { t, setLang, getLang, detectLang } from './i18n';
@@ -38,8 +38,50 @@ async function resolveLang(env: Env, chatId: string, languageCode?: string): Pro
   return detectLang(languageCode);
 }
 
+/** 统一处理快捷按钮：stats / last / dashboard / lang 切换 */
+async function handleStats(env: Env, ctx: Context) {
+  const app = bootstrap(env);
+  const adapter = new TelegramAdapter(ctx, env);
+  const lang = await resolveLang(env, String(ctx.chat!.id), ctx.from?.language_code);
+  await app.run(adapter, { text: t('shortcut.stats', lang) });
+}
+async function handleLast(env: Env, ctx: Context) {
+  const app = bootstrap(env);
+  const adapter = new TelegramAdapter(ctx, env);
+  const lang = await resolveLang(env, String(ctx.chat!.id), ctx.from?.language_code);
+  await app.run(adapter, { text: t('shortcut.last', lang) });
+}
+async function handleDashboard(env: Env, ctx: Context) {
+  const origin = siteOrigin(env);
+  const chatId = String(ctx.chat!.id);
+  const lang = await resolveLang(env, chatId, ctx.from?.language_code);
+  const token = await signAutoLoginToken(chatId, env.TELEGRAM_WEBHOOK_SECRET);
+  const link = `${origin}/auth/auto-login?t=${encodeURIComponent(token)}`;
+  await ctx.reply(t('dashboard.link', lang, link), { parse_mode: 'HTML' });
+}
+async function handleLangToggle(env: Env, ctx: Context) {
+  const chatId = String(ctx.chat!.id);
+  const currentLang = await resolveLang(env, chatId, ctx.from?.language_code);
+  const newLang: Lang = currentLang === 'zh' ? 'en' : 'zh';
+  await setLang(env.SESSION_KV, chatId, newLang);
+  const app = bootstrap(env);
+  await app.session.clear(chatId);
+  const langName = newLang === 'zh' ? '中文' : 'English';
+  await ctx.reply(t('lang.switched', newLang, langName));
+  await ctx.reply(makeWelcome(newLang), { reply_markup: buildKeyboard(newLang) });
+}
+
 function createBot(env: Env): Bot {
   const bot = new Bot(env.TELEGRAM_BOT_TOKEN);
+
+  // ── 命令菜单（点输入框 / 图标可见，Telegram 原生）──
+  bot.api.setMyCommands([
+    { command: 'stats',     description: '📊 本月油耗统计' },
+    { command: 'last',      description: '🕐 最近一次加油' },
+    { command: 'dashboard', description: '📊 打开 Dashboard' },
+    { command: 'lang',      description: '🌐 切换语言' },
+    { command: 'help',      description: '📖 使用方法' },
+  ]).catch(e => console.error('[setup] setMyCommands error:', e));
 
   // 诊断日志：记录所有 update 类型
   bot.use(async (ctx, next) => {
@@ -54,25 +96,16 @@ function createBot(env: Env): Bot {
 
   bot.command('start', async ctx => {
     const lang = await resolveLang(env, ctx.chat!.id.toString(), ctx.from?.language_code);
+    // 首次使用时推送 Reply Keyboard（菜单栏，常驻输入框上方）
     await ctx.reply(makeWelcome(lang), { reply_markup: buildKeyboard(lang) });
   });
   bot.command('help', async ctx => {
     const lang = await resolveLang(env, ctx.chat!.id.toString(), ctx.from?.language_code);
-    await ctx.reply(makeHelp(lang), { reply_markup: buildKeyboard(lang) });
+    await ctx.reply(makeHelp(lang));
   });
 
-  bot.command('last', async ctx => {
-    const app = bootstrap(env);
-    const adapter = new TelegramAdapter(ctx, env);
-    const lang = await resolveLang(env, ctx.chat!.id.toString(), ctx.from?.language_code);
-    await app.run(adapter, { text: t('shortcut.last', lang) });
-  });
-  bot.command('stats', async ctx => {
-    const app = bootstrap(env);
-    const adapter = new TelegramAdapter(ctx, env);
-    const lang = await resolveLang(env, ctx.chat!.id.toString(), ctx.from?.language_code);
-    await app.run(adapter, { text: t('shortcut.stats', lang) });
-  });
+  bot.command('last',  ctx => handleLast(env, ctx));
+  bot.command('stats', ctx => handleStats(env, ctx));
 
   // spec 010: 语言切换命令
   bot.command('lang', async ctx => {
@@ -80,31 +113,18 @@ function createBot(env: Env): Bot {
     const arg = ctx.message?.text?.split(/\s+/)[1]?.toLowerCase();
     if (arg === 'zh' || arg === 'en') {
       await setLang(env.SESSION_KV, chatId, arg);
-      // 切换语言时清空会话历史，防止旧历史干扰新语言
       const app = bootstrap(env);
       await app.session.clear(chatId);
-      await ctx.reply(t('lang.switched', arg, arg === 'zh' ? '中文' : 'English'), {
-        reply_markup: buildKeyboard(arg),
-      });
+      const langName = arg === 'zh' ? '中文' : 'English';
+      await ctx.reply(t('lang.switched', arg, langName), { reply_markup: buildKeyboard(arg) });
+      await ctx.reply(makeWelcome(arg));
     } else {
       const lang = await resolveLang(env, chatId, ctx.from?.language_code);
       await ctx.reply(t('lang.unknown', lang));
     }
   });
 
-  bot.command('dashboard', async ctx => {
-    const origin = siteOrigin(env);
-    const chatId = ctx.chat.id.toString();
-    const lang = await resolveLang(env, chatId, ctx.from?.language_code);
-
-    // HMAC 签名 token（自包含，零 KV）：用户从 TG 点链接 → 自动登录 → 直接进看板
-    const token = await signAutoLoginToken(chatId, env.TELEGRAM_WEBHOOK_SECRET);
-    const link = `${origin}/auth/auto-login?t=${encodeURIComponent(token)}`;
-    return ctx.reply(t('dashboard.link', lang, link), {
-      parse_mode: 'HTML',
-      reply_markup: buildKeyboard(lang),
-    });
-  });
+  bot.command('dashboard', ctx => handleDashboard(env, ctx));
 
   // spec 016: 账号绑定（仅在 Telegram 内发起）。输入邮箱 → 发验证链接 → 点击即把本 TG 账号数据并入该邮箱账号。
   // PWA 完全不感知此流程；纯 PWA 用户无需知道 Telegram 的存在。
@@ -145,58 +165,16 @@ function createBot(env: Env): Bot {
     await ctx.reply(t('bind.link_sent', lang, email));
   });
 
-  // ── 内联键盘回调处理 ──
+  // ── Reply Keyboard 按钮文字拦截（点菜单栏按钮 = 发送对应文字）──
 
-  bot.on('callback_query:data', async ctx => {
-    const data = ctx.callbackQuery!.data!;
-    console.log('[callback] received:', data);
-
-    // 先消除加载动画
-    try {
-      await ctx.answerCallbackQuery();
-    } catch (e) {
-      console.error('[callback] answerCallbackQuery failed:', e instanceof Error ? e.message : String(e));
-    }
-
-    try {
-      if (data === 'stats') {
-        const app = bootstrap(env);
-        const adapter = new TelegramAdapter(ctx, env);
-        const lang = await resolveLang(env, ctx.chat!.id.toString(), ctx.from?.language_code);
-        await app.run(adapter, { text: t('shortcut.stats', lang) });
-      } else if (data === 'last') {
-        const app = bootstrap(env);
-        const adapter = new TelegramAdapter(ctx, env);
-        const lang = await resolveLang(env, ctx.chat!.id.toString(), ctx.from?.language_code);
-        await app.run(adapter, { text: t('shortcut.last', lang) });
-      } else if (data === 'dashboard') {
-        const origin = siteOrigin(env);
-        const chatId = ctx.chat!.id.toString();
-        const lang = await resolveLang(env, chatId, ctx.from?.language_code);
-        const token = await signAutoLoginToken(chatId, env.TELEGRAM_WEBHOOK_SECRET);
-        const link = `${origin}/auth/auto-login?t=${encodeURIComponent(token)}`;
-        await ctx.reply(t('dashboard.link', lang, link), {
-          parse_mode: 'HTML',
-          reply_markup: buildKeyboard(lang),
-        });
-      } else if (data === 'lang:zh' || data === 'lang:en') {
-        const currentLang = data.split(':')[1] as Lang;
-        const newLang: Lang = currentLang === 'zh' ? 'en' : 'zh';
-        const chatId = ctx.chat!.id.toString();
-        await setLang(env.SESSION_KV, chatId, newLang);
-        const app = bootstrap(env);
-        await app.session.clear(chatId);
-        const langName = newLang === 'zh' ? '中文' : 'English';
-        await ctx.reply(t('lang.switched', newLang, langName));
-        await ctx.reply(makeWelcome(newLang), { reply_markup: buildKeyboard(newLang) });
-      } else {
-        console.log('[callback] unknown data:', data);
-      }
-    } catch (e) {
-      console.error('[callback] handler error:', e instanceof Error ? e.stack : String(e));
-      await ctx.reply(t('general.fallback_error', 'zh'));
-    }
-  });
+  bot.hears(t('button.stats', 'zh'),     ctx => handleStats(env, ctx));
+  bot.hears(t('button.stats', 'en'),     ctx => handleStats(env, ctx));
+  bot.hears(t('button.last', 'zh'),      ctx => handleLast(env, ctx));
+  bot.hears(t('button.last', 'en'),      ctx => handleLast(env, ctx));
+  bot.hears(t('button.dashboard', 'zh'), ctx => handleDashboard(env, ctx));
+  bot.hears(t('button.dashboard', 'en'), ctx => handleDashboard(env, ctx));
+  bot.hears(t('button.lang_to_en', 'zh'), ctx => handleLangToggle(env, ctx));
+  bot.hears(t('button.lang_to_zh', 'en'), ctx => handleLangToggle(env, ctx));
 
   bot.on('message:text', async ctx => {
     try {
@@ -310,7 +288,7 @@ export default {
           const hookUrl = info.url || url.origin + '/telegram-webhook';
           const result = await bot.api.setWebhook(hookUrl, {
             secret_token: env.TELEGRAM_WEBHOOK_SECRET,
-            allowed_updates: ['message', 'callback_query'],
+            allowed_updates: ['message'],
           });
           return new Response(JSON.stringify({ ok: true, was: info.allowed_updates, now: result }), {
             status: 200,
