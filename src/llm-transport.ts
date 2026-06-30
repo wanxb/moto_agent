@@ -1,5 +1,5 @@
 import { Message, ToolCall, ToolDefinition, LLMResponse, ResolvedToolCall } from './types';
-import { DEEPSEEK_MODEL, ANTHROPIC_MODEL, MAX_TOKENS } from './config';
+import { DEEPSEEK_MODEL, ANTHROPIC_MODEL, MAX_TOKENS, LLM_FETCH_TIMEOUT_MS } from './config';
 
 const DEEPSEEK_URL = 'https://api.deepseek.com/v1/chat/completions';
 const ANTHROPIC_URL = 'https://api.anthropic.com/v1/messages';
@@ -13,7 +13,11 @@ export function sleep(ms: number): Promise<void> {
 }
 
 export function isRetryable(e: unknown): boolean {
-  return e instanceof LLMError && (e.status === 0 || e.status === 429 || e.status >= 500);
+  // status 0 = 本地超时/网络错误（AbortSignal.timeout 触发），可重试
+  if (e instanceof LLMError && (e.status === 0 || e.status === 429 || e.status >= 500)) return true;
+  // AbortController/AbortSignal 超时 → 可重试/fallback
+  if (e instanceof Error && e.name === 'AbortError') return true;
+  return false;
 }
 
 // ── DeepSeek (OpenAI-compatible) ─────────────────────────────────────────────
@@ -37,7 +41,7 @@ export async function callDeepSeek(
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
       body: JSON.stringify(body),
-      signal: AbortSignal.timeout(7_000),
+      signal: AbortSignal.timeout(LLM_FETCH_TIMEOUT_MS),
     });
   } catch (e) {
     // fetch 超时或网络错误 → 包装为 LLMError(0) 以便触发重试
@@ -94,9 +98,10 @@ export async function callAnthropic(
         'anthropic-version': '2023-06-01',
       },
       body: JSON.stringify(body),
-      signal: AbortSignal.timeout(7_000),
+      signal: AbortSignal.timeout(LLM_FETCH_TIMEOUT_MS),
     });
   } catch (e) {
+    // fetch 超时或网络错误 → 包装为 LLMError(0) 以便触发重试
     throw new LLMError(0, e instanceof Error ? e.message : String(e));
   }
   if (!res.ok) throw new LLMError(res.status, await res.text());

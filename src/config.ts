@@ -55,6 +55,14 @@ export const FUEL_EDITABLE_COLUMNS = ['date', 'odometer', 'liters', 'price_total
 /** OAuth state 参数 KV TTL（秒，5 分钟） */
 export const GOOGLE_OAUTH_STATE_TTL = 300;
 
+// ── 超时保护（防止外部服务卡住导致 Worker 挂起）───────────────────────────────
+/** Workers AI embedding 调用超时（ms），超时则知识库降级跳过 */
+export const EMBEDDING_TIMEOUT_MS = 10000;
+/** Vectorize 索引查询超时（ms） */
+export const VECTORIZE_QUERY_TIMEOUT_MS = 8000;
+/** LLM API 单次 fetch 超时（ms），超时触发 AbortController → 重试/fallback */
+export const LLM_FETCH_TIMEOUT_MS = 30000;
+
 // ── 去重（spec 017）─────────────────────────────────────────────────────────
 /** 加油去重：同车同日里程差 ≤ 此值（km）视为疑似重复，写入前软拦截 */
 export const FUEL_DUP_KM_THRESHOLD = 2;

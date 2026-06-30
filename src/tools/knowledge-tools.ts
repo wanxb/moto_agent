@@ -6,6 +6,7 @@ import type { Env } from '../types';
 import { embed } from '../knowledge/embed';
 import { getChunksById } from '../database';
 import { t } from '../i18n';
+import { VECTORIZE_QUERY_TIMEOUT_MS } from '../config';
 
 export class SearchKnowledgeTool implements Tool {
   readonly name = 'search_knowledge';
@@ -35,11 +36,21 @@ export class SearchKnowledgeTool implements Tool {
 
     let resp: { matches?: Array<{ metadata?: Record<string, unknown> }> };
     try {
-      resp = await this.index.query(vector, {
-        topK: 5,
-        returnMetadata: true,
-        returnValues: false,
-      }) as typeof resp;
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      try {
+        resp = await Promise.race([
+          this.index.query(vector, {
+            topK: 5,
+            returnMetadata: true,
+            returnValues: false,
+          }),
+          new Promise<never>((_, reject) => {
+            timer = setTimeout(() => reject(new Error('Vectorize query timed out')), VECTORIZE_QUERY_TIMEOUT_MS);
+          }),
+        ]) as typeof resp;
+      } finally {
+        if (timer) clearTimeout(timer);
+      }
     } catch (e) {
       console.error('[knowledge] vectorize error:', e);
       return t('knowledge.search_failed', lang);
