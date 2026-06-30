@@ -19,8 +19,10 @@ body {
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   background: var(--bg);
   color: var(--text);
-  min-height: 100vh;
+  min-height: 100dvh;
   -webkit-text-size-adjust: 100%;
+  /* 防止键盘弹起时页面滚动 + 下拉刷新 */
+  overscroll-behavior: none;
   /* 移动端安全区（刘海/底部 home 条） */
   padding:
     env(safe-area-inset-top)

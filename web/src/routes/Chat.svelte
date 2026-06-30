@@ -18,15 +18,23 @@
   let ready = $state(false);
   let listEl = $state<HTMLDivElement | undefined>();
   let inputEl = $state<HTMLTextAreaElement | undefined>();
-  let viewportHeight = $state('100vh');
+  let viewportHeight = $state('100dvh');
   let viewportCleanup: (() => void) | undefined;
 
   onMount(async () => {
-    // visualViewport 键盘适配：键盘弹起时把高度缩到可视区，输入框就不被遮了
+    // 键盘适配：dvh 覆盖大部分现代浏览器；visualViewport 兜底旧设备
     if (window.visualViewport) {
-      const onResize = () => { viewportHeight = `${window.visualViewport!.height}px`; };
-      window.visualViewport.addEventListener('resize', onResize);
-      viewportCleanup = () => window.visualViewport!.removeEventListener('resize', onResize);
+      const updateHeight = () => {
+        viewportHeight = `${window.visualViewport!.height}px`;
+      };
+      window.visualViewport.addEventListener('resize', updateHeight);
+      window.visualViewport.addEventListener('scroll', updateHeight);
+      viewportCleanup = () => {
+        window.visualViewport!.removeEventListener('resize', updateHeight);
+        window.visualViewport!.removeEventListener('scroll', updateHeight);
+      };
+      // 立即同步一次（避免 dvh 和 visualViewport 初始值不一致）
+      updateHeight();
     }
 
     const me = await getMe();
@@ -154,7 +162,7 @@
   .app {
     display: flex;
     flex-direction: column;
-    height: 100vh;
+    height: 100dvh;
     max-width: 600px;
     margin: 0 auto;
     transition: height 0.15s ease;
